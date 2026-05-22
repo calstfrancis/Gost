@@ -1,4 +1,4 @@
-# Gost
+# Gost v0.1.0
 
 **Academic Essay Templater** — a native GTK4 / libadwaita desktop app for generating academic essay templates in **LaTeX** and **Typst**. Built for openSUSE / GNOME. Designed for theology, humanities, and social-science writing.
 
@@ -34,27 +34,12 @@
 
 ## Installation
 
-### AppImage
-```bash
-chmod +x gost-1.2.0-x86_64.AppImage
-./gost-1.2.0-x86_64.AppImage
-# Or install via Gear Lever for desktop integration
-```
-
 ### From source
 ```bash
 git clone https://github.com/calstfrancis/gost
 cd gost
 python3 -m essay_builder.app
 ```
-
-### Build your own AppImage
-```bash
-bash build-appimage.sh
-# Produces gost-1.2.0-x86_64.AppImage in the current directory
-# Install via Gear Lever or run directly
-```
-
 ## Usage
 
 1. Fill in **Title & Authors**, pick a **Citation Style**, adjust **Layout & Spacing**
