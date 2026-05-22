@@ -41,7 +41,7 @@ preview, and Zotero/BetterBibTeX integration.
     dist/*.whl
 
 install -Dm644 gost.desktop \
-    %{buildroot}%{_datadir}/applications/ca.astheology.Gost.desktop
+    %{buildroot}%{_datadir}/applications/ca.calstfrancis.Gost.desktop
 
 %files
 %license LICENSE
@@ -49,7 +49,7 @@ install -Dm644 gost.desktop \
 %{python3_sitelib}/essay_builder/
 %{python3_sitelib}/essay_builder*.dist-info/
 %{_bindir}/gost
-%{_datadir}/applications/ca.astheology.Gost.desktop
+%{_datadir}/applications/ca.calstfrancis.Gost.desktop
 
 %changelog
 * %(date "+%a %b %d %Y") Build User <build@localhost> - 1.2.0-1

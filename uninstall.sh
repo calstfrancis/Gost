@@ -6,6 +6,7 @@ info() { echo -e "${GREEN}[✓]${NC} $*"; }
 
 sudo rm -rf  /usr/local/lib/gost
 sudo rm -f   /usr/local/bin/gost
+sudo rm -rf  /usr/local/share/fonts/gost
 sudo rm -f   /usr/local/share/applications/gost.desktop
 sudo rm -f   /usr/local/share/icons/hicolor/scalable/apps/gost.svg
 sudo rm -f   /usr/local/share/icons/hicolor/symbolic/apps/gost-symbolic.svg

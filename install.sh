@@ -67,6 +67,30 @@ sudo chmod -R 644 "$INSTALL_DIR/essay_builder/"*
 sudo find "$INSTALL_DIR/essay_builder" -type d -exec chmod 755 {} \;
 
 # ------------------------------------------------------------
+# Install bundled fonts
+# ------------------------------------------------------------
+FONT_SRC="${SCRIPT_DIR}/essay_builder/fonts"
+FONT_DST="/usr/local/share/fonts/gost"
+FONT_COUNT=0
+for f in "${FONT_SRC}"/*.ttf "${FONT_SRC}"/*.otf; do
+    [[ -f "$f" ]] && FONT_COUNT=$((FONT_COUNT+1))
+done
+if [[ $FONT_COUNT -gt 0 ]]; then
+    info "Installing ${FONT_COUNT} bundled font file(s)..."
+    sudo mkdir -p "$FONT_DST"
+    for f in "${FONT_SRC}"/*.ttf "${FONT_SRC}"/*.otf; do
+        [[ -f "$f" ]] && sudo cp "$f" "$FONT_DST/"
+    done
+    sudo chmod 644 "${FONT_DST}"/*
+    if command -v fc-cache &>/dev/null; then
+        sudo fc-cache -f "$FONT_DST"
+    fi
+    info "Fonts installed to ${FONT_DST}."
+else
+    warn "No font files found in ${FONT_SRC} — skipping font install."
+fi
+
+# ------------------------------------------------------------
 # Create launcher
 # ------------------------------------------------------------
 info "Creating launcher at ${BIN_LINK}..."
@@ -135,7 +159,7 @@ Type=Application
 Categories=Education;Office;
 Keywords=latex;tex;typst;essay;academic;bibliography;
 StartupNotify=true
-StartupWMClass=ca.astheology.Gost
+StartupWMClass=ca.calstfrancis.Gost
 DESKTOP
 fi
 sudo chmod 644 "${DESKTOP_DIR}/gost.desktop"

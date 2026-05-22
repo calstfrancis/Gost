@@ -11,7 +11,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib, Gio
 
 from texgen import generate, STYLE_DEFAULTS
 
-APP_ID = "ca.astheology.Gost.Debug"
+APP_ID = "ca.calstfrancis.Gost.Debug"
 
 class TestApp(Adw.Application):
     def __init__(self):

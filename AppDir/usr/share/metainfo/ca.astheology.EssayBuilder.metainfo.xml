@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ca.calstfrancis.EssayBuilder</id>
+  <name>Academic Essay Builder</name>
+  <summary>Build well-formed LaTeX and Typst templates for academic essays</summary>
+  <description>
+    <p>
+      A native GTK4 / libadwaita desktop app for generating academic essay
+      templates in LaTeX (extarticle) or Typst. Supports SBL, Chicago, MLA,
+      and APA citation styles, configurable layout, and Zotero integration.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/youruser/essay-builder</url>
+  <releases>
+    <release version="1.0.0" date="2026-05-22"/>
+  </releases>
+</component>

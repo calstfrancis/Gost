@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="gost"
 APP_VERSION="1.2.0"
-APP_ID="ca.astheology.Gost"
+APP_ID="ca.calstfrancis.Gost"
 ARCH="${ARCH:-x86_64}"
 APPIMAGE_NAME="${APP_NAME}-${APP_VERSION}-${ARCH}.AppImage"
 APPDIR="${SCRIPT_DIR}/AppDir"
@@ -73,6 +73,8 @@ mkdir -p "${APPDIR}/usr/share/applications"
 mkdir -p "${APPDIR}/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "${APPDIR}/usr/share/metainfo"
+mkdir -p "${APPDIR}/fonts"
+mkdir -p "${APPDIR}/etc/fonts"
 
 # ----------------------------------------------------------------
 # Copy application source
@@ -81,6 +83,34 @@ info "Copying application files..."
 cp -r "${SCRIPT_DIR}/essay_builder" "${APPDIR}/usr/lib/gost/"
 # Strip bytecode cache — AppImage will regenerate on first run
 find "${APPDIR}/usr/lib/gost" -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+# ----------------------------------------------------------------
+# Bundle fonts
+# ----------------------------------------------------------------
+info "Bundling fonts..."
+FONT_SRC="${SCRIPT_DIR}/essay_builder/fonts"
+FONT_COUNT=0
+if [[ -d "$FONT_SRC" ]]; then
+    for f in "${FONT_SRC}"/*.ttf "${FONT_SRC}"/*.otf; do
+        [[ -f "$f" ]] && cp "$f" "${APPDIR}/fonts/" && FONT_COUNT=$((FONT_COUNT+1))
+    done
+fi
+if [[ $FONT_COUNT -gt 0 ]]; then
+    # Write a fontconfig that includes the bundled fonts dir + the system config
+    cat > "${APPDIR}/etc/fonts/fonts.conf" << 'FONTCONF_EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <!-- Bundled fonts (path resolved by AppRun at launch time) -->
+  <dir>__APPDIR_FONTS__</dir>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+</fontconfig>
+FONTCONF_EOF
+    info "Bundled ${FONT_COUNT} font file(s)."
+else
+    warn "No .ttf/.otf files found in ${FONT_SRC} — font will not be bundled."
+    warn "Place font files in essay_builder/fonts/ before building."
+fi
 
 # ----------------------------------------------------------------
 # AppRun entry point
@@ -93,6 +123,17 @@ HERE="$(dirname "$SELF")"
 
 # Prepend the bundled Python modules
 export PYTHONPATH="${HERE}/usr/lib/gost${PYTHONPATH:+:$PYTHONPATH}"
+
+# ---- Bundled fonts via fontconfig ----
+# If the AppImage ships fonts, point fontconfig at them before Pango starts.
+BUNDLED_FONTCONF="${HERE}/etc/fonts/fonts.conf"
+if [[ -f "$BUNDLED_FONTCONF" ]]; then
+    # Resolve the __APPDIR_FONTS__ placeholder to the real path
+    RUNTIME_FONTCONF="${XDG_RUNTIME_DIR:-/tmp}/gost-fonts-$$.conf"
+    sed "s|__APPDIR_FONTS__|${HERE}/fonts|g" "$BUNDLED_FONTCONF" > "$RUNTIME_FONTCONF"
+    export FONTCONFIG_FILE="$RUNTIME_FONTCONF"
+    trap "rm -f '$RUNTIME_FONTCONF'" EXIT
+fi
 
 # Verify GTK4 and libadwaita are available on this system
 if ! python3 -c "

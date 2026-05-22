@@ -3,7 +3,7 @@ SELF="$(readlink -f "$0")"
 HERE="$(dirname "$SELF")"
 
 # Prepend the bundled Python modules
-export PYTHONPATH="${HERE}/usr/lib/gost${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="${HERE}/usr/lib/essay-builder${PYTHONPATH:+:$PYTHONPATH}"
 
 # Verify GTK4 and libadwaita are available on this system
 if ! python3 -c "

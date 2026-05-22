@@ -18,7 +18,7 @@ sys.path.insert(0, "/usr/local/lib/gost")
 from texgen import generate, STYLE_DEFAULTS
 print("step 5: texgen imported", flush=True)
 
-APP_ID = "ca.astheology.Gost"
+APP_ID = "ca.calstfrancis.Gost"
 
 class TestApp(Adw.Application):
     def __init__(self):

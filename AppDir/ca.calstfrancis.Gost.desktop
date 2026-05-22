@@ -2,11 +2,11 @@
 Name=Gost
 GenericName=Academic Essay Templater
 Comment=Generate LaTeX and Typst templates for academic essays
-Exec=/usr/local/bin/gost
+Exec=AppRun
 Icon=gost
 Terminal=false
 Type=Application
 Categories=Education;Office;
-Keywords=latex;tex;typst;essay;academic;bibliography;sbl;chicago;apa;mla;
+Keywords=latex;tex;typst;essay;academic;bibliography;
 StartupNotify=true
 StartupWMClass=ca.calstfrancis.Gost
