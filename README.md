@@ -1,4 +1,4 @@
-# Gost v0.1.1
+# Gost
 
 **Academic Essay Templater** — a native GTK4 / libadwaita desktop app for generating academic essay templates in **LaTeX** and **Typst**. Built for openSUSE / GNOME. Designed for theology, humanities, and social-science writing.
 
@@ -34,12 +34,26 @@
 
 ## Installation
 
+### AppImage
+```bash
+chmod +x gost-1.2.0-x86_64.AppImage
+./gost-1.2.0-x86_64.AppImage
+# Or install via Gear Lever for desktop integration
+```
+
 ### From source
 ```bash
 git clone https://github.com/calstfrancis/gost
 cd gost
 python3 -m essay_builder.app
 ```
+
+### Build your own AppImage
+```bash
+bash build-appimage.sh
+# Produces gost-1.2.0-x86_64.AppImage in the current directory
+```
+
 ## Usage
 
 1. Fill in **Title & Authors**, pick a **Citation Style**, adjust **Layout & Spacing**
@@ -52,10 +66,37 @@ python3 -m essay_builder.app
 ## Development
 
 ```bash
-python3 -m essay_builder.app          # run directly
-python3 -m pytest tests/              # run tests (no GTK needed)
-bash build-appimage.sh                # build AppImage
+python3 -m essay_builder.app                    # run directly
+python3 -m unittest discover tests/ -v          # run tests (no GTK needed)
+bash build-appimage.sh                          # build AppImage
 ```
+
+## Troubleshooting
+
+Common issues and distribution-specific install commands are in [HELP.md](HELP.md#troubleshooting).
+
+| Symptom | Fix |
+|---|---|
+| Preview button greyed out | Install `typst` (Typst) or `latexmk` + `poppler-tools` (LaTeX) |
+| `ImportError: cannot import name 'Adw'` | Install libadwaita typelib — see HELP.md |
+| `ModuleNotFoundError: No module named 'gi'` | Install PyGObject — see HELP.md |
+| `gtk-icon-theme-error-quark` warning | Install `adwaita-icon-theme` — see HELP.md |
+
+## Roadmap
+
+Planned features (contributions welcome):
+
+- [ ] BibLaTeX backend selector (biber / bibtex8)
+- [ ] Custom LaTeX preamble editor (freeform preamble block)
+- [ ] Typst `hayagriva` bibliography integration
+- [ ] CSL citation style support via Pandoc bridge
+- [ ] Dark/light preview theme toggle
+- [ ] CLI mode — `gost generate --style SBL --format typst -o essay.typ`
+- [ ] Flatpak manifest / Flathub submission
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the module layout, widget hierarchy, and how to add a new citation style or extra package.
 
 ## License
 

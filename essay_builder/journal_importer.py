@@ -125,10 +125,34 @@ def _bib_resource(text: str) -> Dict[str, Any]:
     return out
 
 
+_DANGEROUS_PATTERNS = [
+    (r'\\write18\b',                    r"\write18 (shell escape)"),
+    (r'\\input\s*\{\s*\|',              r"\input{| …} (piped shell command)"),
+    (r'\\immediate\\write18\b',         r"\immediate\write18 (shell escape)"),
+    (r'\\openout\b',                    r"\openout (arbitrary file write)"),
+    (r'\\newwrite\s*\\jobname\b',       r"\newwrite\jobname (jobname file write)"),
+    (r'\\ShellEscape\b',                r"\ShellEscape"),
+    (r'\\directlua\s*\{',               r"\directlua (Lua execution)"),
+    (r'\\input\s*\{\s*/etc/',           r"\input{/etc/…} (system file read)"),
+    (r'\\include\s*\{\s*/etc/',         r"\include{/etc/…} (system file read)"),
+]
+
+
+def _security_check(text: str) -> list:
+    """Return a list of human-readable warnings for dangerous LaTeX constructs."""
+    warnings = []
+    for pattern, label in _DANGEROUS_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            warnings.append(label)
+    return warnings
+
+
 def parse_template(path: str) -> Dict[str, Any]:
     """
     Parse a .tex / .cls / .sty file and return a partial state dict.
     Keys beginning with '_' are metadata for display only, not applied to state.
+    '_security_warnings' is a list of strings; non-empty means the file contains
+    potentially dangerous LaTeX commands.
     """
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
@@ -139,6 +163,11 @@ def parse_template(path: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for fn in (_docclass, _geometry, _font, _spacing, _parindent, _biblatex, _bib_resource):
         result.update(fn(text))
+
+    warnings = _security_check(text)
+    if warnings:
+        result["_security_warnings"] = warnings
+
     return result
 
 

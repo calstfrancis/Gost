@@ -143,6 +143,7 @@ class GostWindow(Adw.ApplicationWindow):
         self._compiling = False
 
         self._build_ui()
+        self._check_compiler_deps()
 
         # Apply saved GOST font preference on startup
         if self._config.get("use_gost_font", False):
@@ -221,10 +222,10 @@ class GostWindow(Adw.ApplicationWindow):
         export_btn.connect("clicked", self._on_export)
         hbar.pack_end(export_btn)
 
-        preview_btn = Gtk.Button(label="Preview")
-        preview_btn.add_css_class("flat")
-        preview_btn.connect("clicked", self._on_preview_btn)
-        hbar.pack_end(preview_btn)
+        self._preview_btn = Gtk.Button(label="Preview")
+        self._preview_btn.add_css_class("flat")
+        self._preview_btn.connect("clicked", self._on_preview_btn)
+        hbar.pack_end(self._preview_btn)
 
         about_btn = Gtk.Button()
         about_btn.set_icon_name("help-about-symbolic")
@@ -1117,6 +1118,42 @@ class GostWindow(Adw.ApplicationWindow):
             self._refresh_source()
 
     # ------------------------------------------------------------------
+    # Compiler dependency check
+    # ------------------------------------------------------------------
+
+    def _check_compiler_deps(self):
+        from essay_builder.preview_compiler import typst_available, latex_available, image_tools_available
+        if self._format == "typst":
+            if not typst_available():
+                self._preview_btn.set_sensitive(False)
+                self._preview_btn.set_tooltip_text(
+                    "typst not found in PATH — install from https://typst.app"
+                )
+                self._compile_status.set_text(
+                    "typst not installed — Preview disabled. Install typst and restart."
+                )
+            else:
+                self._preview_btn.set_sensitive(True)
+                self._preview_btn.set_tooltip_text("")
+                if not self._compile_status.get_text().startswith("typst not"):
+                    self._compile_status.set_text("")
+        else:
+            missing = []
+            if not latex_available():
+                missing.append("latexmk (install texlive-latexmk)")
+            if not image_tools_available():
+                missing.append("pdftoppm (install poppler-tools) or convert (ImageMagick)")
+            if missing:
+                self._preview_btn.set_sensitive(False)
+                self._preview_btn.set_tooltip_text("Missing: " + ", ".join(missing))
+                self._compile_status.set_text("Missing: " + " · ".join(missing))
+            else:
+                self._preview_btn.set_sensitive(True)
+                self._preview_btn.set_tooltip_text("")
+                if self._compile_status.get_text().startswith("Missing:"):
+                    self._compile_status.set_text("")
+
+    # ------------------------------------------------------------------
     # Compiled preview
     # ------------------------------------------------------------------
 
@@ -1358,6 +1395,7 @@ class GostWindow(Adw.ApplicationWindow):
         if hasattr(self, "_typst_features_grp"):
             self._typst_features_grp.set_visible(not is_latex)
         self._dirty_preview()
+        self._check_compiler_deps()
 
     # ------------------------------------------------------------------
     # Date helper
@@ -1395,6 +1433,32 @@ class GostWindow(Adw.ApplicationWindow):
         if "_error" in state:
             self._show_toast(f"Import failed: {state['_error']}", timeout=4)
             return
+
+        if "_security_warnings" in state:
+            warnings = state["_security_warnings"]
+            dlg = Adw.AlertDialog(
+                heading="Security warning",
+                body=(
+                    "This file contains potentially dangerous LaTeX commands:\n\n"
+                    + "\n".join(f"  • {w}" for w in warnings)
+                    + "\n\nOnly import templates from sources you trust."
+                ),
+            )
+            dlg.add_response("cancel", "Cancel")
+            dlg.add_response("import", "Import anyway")
+            dlg.set_response_appearance("import", Adw.ResponseAppearance.DESTRUCTIVE)
+
+            def _on_warn_response(d, response, _state=state):
+                if response == "import":
+                    self._do_apply_import(_state)
+            dlg.connect("response", _on_warn_response)
+            dlg.present(self)
+            return
+
+        self._do_apply_import(state)
+
+    def _do_apply_import(self, state: dict):
+        from essay_builder.journal_importer import describe_result
         # Merge into current state
         current = self._collect_state()
         current.update({k: v for k, v in state.items() if not k.startswith("_")})
@@ -1410,7 +1474,7 @@ class GostWindow(Adw.ApplicationWindow):
         about = Adw.AboutWindow()
         about.set_transient_for(self)
         about.set_application_name("Gost")
-        about.set_version("1.1.0")
+        about.set_version("1.2.0")
         about.set_comments(
             "Academic Essay Templater.\n"
             "Generate LaTeX and Typst templates for SBL, Chicago, MLA, and APA."
@@ -1421,12 +1485,13 @@ class GostWindow(Adw.ApplicationWindow):
         about.set_website("https://github.com/calstfrancis/gost")
         about.set_issue_url("https://github.com/calstfrancis/gost/issues")
         about.set_release_notes(
-            "<p>Version 1.1.0</p>"
+            "<p>Version 1.2.0</p>"
             "<ul>"
             "<li>Compiled PDF preview (Typst and LaTeX)</li>"
-            "<li>Journal LaTeX template importer</li>"
+            "<li>Journal LaTeX template importer with security validation</li>"
             "<li>Running headers and footers panel</li>"
             "<li>Typst endnotes support</li>"
+            "<li>Startup compiler dependency check — Preview button disabled with clear warning when typst/latexmk not found</li>"
             "<li>Template profiles (save/load/delete)</li>"
             "<li>Language support: Russian, Hebrew, Japanese, Tibetan, Sanskrit, Greek, Chinese</li>"
             "<li>Defaults to Typst format</li>"

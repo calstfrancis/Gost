@@ -128,3 +128,119 @@ The **GOST Type B font** toggle at the bottom of the sidebar switches the applic
 - The **Today** button next to the date field fills in today's date in `YYYY-MM-DD` format.
 - The **Source / Compiled** toggle in the preview panel lets you switch views without leaving the preview.
 - The **Refresh** button in the source preview regenerates the template from the current settings.
+
+---
+
+## Extra packages — what each one does
+
+### LaTeX packages
+
+| Toggle | Package | What it adds |
+|---|---|---|
+| Drop caps | `lettrine` | `\lettrine{L}{etter}` — decorative oversized first letter at the start of a paragraph |
+| Marginalia | `marginnote` | `\marginnote{text}` — float notes into the margin independent of footnotes |
+| Smart quotes | `csquotes` | Context-sensitive quotation marks; integrates with biblatex so `\autocite` uses the right quote style |
+| Color support | `xcolor` | `\textcolor{red}{text}`, `\colorbox{}{}`, and 68 named dvipsnames colours |
+| Code listings | `listings` | `\begin{lstlisting}` — syntax-highlighted source code blocks |
+| Enhanced lists | `enumitem` | Fine-grained control over `enumerate`, `itemize`, `description` spacing and labels |
+| Better tables | `booktabs` | `\toprule`, `\midrule`, `\bottomrule` — publication-quality horizontal rules |
+| SI units | `siunitx` | `\qty{9.81}{\metre\per\second\squared}` — correctly typeset physical quantities |
+| Epigraph | `epigraph` | `\epigraph{quote}{— Source}` — formatted block quotation with attribution |
+| Line numbers | `lineno` | Margin line numbers for draft / peer-review submissions |
+| Todo notes | `todonotes` | `\todo{Fix this}` — coloured margin annotations that list in the margin and in a summary |
+
+### Typst packages
+
+| Toggle | Package | What it adds |
+|---|---|---|
+| Drop caps | `droplet` | `#dropcap[…]` — decorative first-letter drop cap |
+| Margin notes | *(built-in)* | `#place(right + top)[…]` snippet — no extra package; just a placement helper comment |
+| Code listings | `codly` | `#codly()` show rule — syntax-highlighted code blocks with line numbers |
+| Styled boxes | `showybox` | `#showybox(…)[…]` — coloured/framed content boxes with customisable borders |
+| Callout boxes | `gentle-clues` | `#info[…]`, `#warning[…]`, `#tip[…]` — admonition blocks |
+| Enhanced tables | `tablex` | `#tablex(…)` — column/row spans and merged cells not available in native Typst tables |
+| Margin annotations | `drafting` | `#margin-note[…]` — margin annotations for draft review |
+
+---
+
+## Troubleshooting
+
+### Preview button is greyed out / "typst not installed"
+
+The **Preview** button is disabled when the required compiler is not found in your PATH.
+
+- **Typst:** install from <https://typst.app> or via your package manager:
+  - openSUSE: `zypper in typst`
+  - Arch: `pacman -S typst`
+  - Fedora/Ubuntu: download the binary from the releases page and place it in `~/.local/bin/`
+- **LaTeX:** install TeX Live including latexmk:
+  - openSUSE: `zypper in texlive-latexmk`
+  - Debian/Ubuntu: `apt install latexmk`
+  - Fedora: `dnf install latexmk`
+  - Arch: `pacman -S texlive-binextra`
+
+After installing, restart Gost — the check runs at startup.
+
+---
+
+### Missing `pdftoppm` / PDF preview shows "image converter not found"
+
+LaTeX preview needs either `pdftoppm` (from poppler-tools) or `convert` (from ImageMagick).
+
+- openSUSE: `zypper in poppler-tools`
+- Debian/Ubuntu: `apt install poppler-utils`
+- Fedora: `dnf install poppler-utils`
+- Arch: `pacman -S poppler`
+
+---
+
+### `gi.repository.GLib.Error: gtk-icon-theme-error-quark`
+
+This warning is benign on most systems — the app still works. It means the GTK icon theme cannot find a specific symbolic icon. Fix with:
+
+- openSUSE: `zypper in adwaita-icon-theme`
+- Debian/Ubuntu: `apt install adwaita-icon-theme`
+- Arch: `pacman -S adwaita-icon-theme`
+
+---
+
+### `ImportError: cannot import name 'Adw' from gi.repository`
+
+libadwaita is not installed or the typelib is missing.
+
+- openSUSE: `zypper in typelib-1_0-Adw-1`
+- Debian/Ubuntu (≥ 23.04): `apt install gir1.2-adw-1`
+- Fedora: `dnf install libadwaita`
+- Arch: `pacman -S libadwaita`
+
+---
+
+### `ModuleNotFoundError: No module named 'gi'`
+
+PyGObject is not installed for your Python.
+
+- openSUSE: `zypper in python3-gobject`
+- Debian/Ubuntu: `apt install python3-gi`
+- Fedora: `dnf install python3-gobject`
+- Arch: `pacman -S python-gobject`
+
+---
+
+### GTK4 typelib missing (`Gtk-4.0`)
+
+- openSUSE: `zypper in typelib-1_0-Gtk-4_0`
+- Debian/Ubuntu (≥ 22.10): `apt install gir1.2-gtk-4.0`
+- Fedora: `dnf install gtk4`
+- Arch: `pacman -S gtk4`
+
+---
+
+### Bibliography file warning: "may not be valid BibTeX"
+
+Gost checks the first 1 000 bytes of your `.bib` file for standard entry types. If your file uses non-standard or custom entry types this warning appears but the file is still used. Ignore it unless citation output is wrong.
+
+---
+
+### Security warning on journal import
+
+If you see "This file contains potentially dangerous LaTeX commands", the imported `.cls`/`.tex` file contains constructs like `\write18` (shell escape) or `\openout` (arbitrary file writes). These are uncommon in legitimate journal templates. Only click **Import anyway** if you obtained the file from a trusted publisher.
