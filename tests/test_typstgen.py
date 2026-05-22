@@ -164,6 +164,44 @@ class TestTypstGenerateExtras(unittest.TestCase):
         self.assertIn("Russian", generate(_base(languages=["russian"])))
 
 
+class TestTypstGenerateNewFeatures(unittest.TestCase):
+    def test_custom_preamble_injected(self):
+        out = generate(_base(custom_typst_preamble="#let custom = true"))
+        self.assertIn("#let custom = true", out)
+        self.assertIn("// --- Custom show rules", out)
+
+    def test_custom_preamble_before_body(self):
+        out = generate(_base(custom_typst_preamble="#let x = 1"))
+        custom_pos = out.index("Custom show rules")
+        body_pos = out.index("// --- Body ---")
+        self.assertLess(custom_pos, body_pos)
+
+    def test_chapters_replace_default_sections(self):
+        out = generate(_base(chapters=["Methods", "Discussion"]))
+        self.assertIn("= Methods", out)
+        self.assertIn("= Discussion", out)
+        self.assertNotIn("= Introduction", out)
+
+    def test_empty_chapters_uses_default_stubs(self):
+        out = generate(_base(chapters=[]))
+        self.assertIn("= Introduction", out)
+        self.assertIn("= Conclusion", out)
+
+    def test_multifile_chapters_use_include(self):
+        out = generate(_base(chapters=["Intro", "Body"], multifile=True))
+        self.assertIn('#include "chapter01_intro.typ"', out)
+        self.assertIn('#include "chapter02_body.typ"', out)
+        self.assertNotIn("= Intro", out)
+
+    def test_typst_csl_style_override(self):
+        out = generate(_base(typst_csl_style="ieee", print_bib=True))
+        self.assertIn('style: "ieee"', out)
+
+    def test_typst_csl_style_default_when_empty(self):
+        out = generate(_base(cit_style="SBL", typst_csl_style="", print_bib=True))
+        self.assertIn("chicago-notes", out)
+
+
 class TestTypstHeadingStyles(unittest.TestCase):
     def test_all_four_styles_have_rules(self):
         for style in ("SBL", "Chicago", "MLA", "APA"):

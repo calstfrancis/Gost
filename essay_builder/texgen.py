@@ -220,6 +220,24 @@ FEATURE_PACKAGES: Dict[str, str] = {
 }
 
 
+def _chapter_slug(title: str, index: int) -> str:
+    slug = "".join(c if c.isalnum() else "_" for c in title.lower()).strip("_")
+    return f"chapter{index:02d}_{slug}" if slug else f"chapter{index:02d}"
+
+
+def generate_chapter_file(title: str, cite_cmd: str = "autocite") -> str:
+    """Return a minimal standalone chapter body file (no preamble)."""
+    lines = [
+        f"% Chapter: {title}",
+        "",
+        r"\section{" + (title or "Chapter") + "}",
+        "",
+        f"% Write chapter content here. Use \\{cite_cmd}{{key}} to cite.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _format_date(raw):
     if not raw:
         return r"\today"
@@ -472,6 +490,13 @@ def generate(s: Dict[str, Any]) -> str:
         L.append(r"\usepackage{endnotes}")
         L.append(r"\let\footnote=\endnote")
 
+    custom_preamble = s.get("custom_latex_preamble", "").strip()
+    if custom_preamble:
+        L.append("")
+        L.append("% --- Custom preamble ---")
+        for line in custom_preamble.splitlines():
+            L.append(line)
+
     # ---- title block ----
     L.append("")
     L.append("% --- Title block ---")
@@ -518,15 +543,31 @@ def generate(s: Dict[str, Any]) -> str:
         L.append(r"\tableofcontents")
         L.append(r"\newpage")
 
+    chapters = s.get("chapters", [])
+    multifile = s.get("multifile", False)
+
     L.append("")
     L.append("% --- Body ---")
     L.append("")
-    L.append(r"\section{Introduction}")
-    L.append("")
-    L.append("% Begin writing here. Use " + chr(92) + cite_cmd + "{citationkey} to cite.")
-    L.append("")
-    L.append(r"\section{Conclusion}")
-    L.append("")
+    if chapters:
+        if multifile:
+            for i, ch in enumerate(chapters, 1):
+                slug = _chapter_slug(ch, i)
+                L.append(r"\input{" + slug + "}")
+                L.append("")
+        else:
+            for ch in chapters:
+                L.append(r"\section{" + (ch or "Untitled Chapter") + "}")
+                L.append("")
+                L.append("% Begin writing here. Use " + chr(92) + cite_cmd + "{citationkey} to cite.")
+                L.append("")
+    else:
+        L.append(r"\section{Introduction}")
+        L.append("")
+        L.append("% Begin writing here. Use " + chr(92) + cite_cmd + "{citationkey} to cite.")
+        L.append("")
+        L.append(r"\section{Conclusion}")
+        L.append("")
 
     if notes == "endnote" and cit in ("SBL", "Chicago"):
         L.append("")

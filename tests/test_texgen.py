@@ -198,6 +198,36 @@ class TestGenerateExtras(unittest.TestCase):
                       generate(_base(cit_style="SBL", use_style_headings=True)))
 
 
+class TestGenerateNewFeatures(unittest.TestCase):
+    def test_custom_preamble_injected(self):
+        out = generate(_base(custom_latex_preamble=r"\usepackage{custom}"))
+        self.assertIn(r"\usepackage{custom}", out)
+        self.assertIn("% --- Custom preamble ---", out)
+
+    def test_custom_preamble_before_begin_document(self):
+        out = generate(_base(custom_latex_preamble=r"\newcommand{\test}{x}"))
+        custom_pos = out.index("Custom preamble")
+        begin_pos = out.index(r"\begin{document}")
+        self.assertLess(custom_pos, begin_pos)
+
+    def test_chapters_replace_introduction_conclusion(self):
+        out = generate(_base(chapters=["Methodology", "Results"]))
+        self.assertIn(r"\section{Methodology}", out)
+        self.assertIn(r"\section{Results}", out)
+        self.assertNotIn(r"\section{Introduction}", out)
+
+    def test_empty_chapters_uses_default_stubs(self):
+        out = generate(_base(chapters=[]))
+        self.assertIn(r"\section{Introduction}", out)
+        self.assertIn(r"\section{Conclusion}", out)
+
+    def test_multifile_chapters_use_input(self):
+        out = generate(_base(chapters=["Intro", "Body"], multifile=True))
+        self.assertIn(r"\input{chapter01_intro}", out)
+        self.assertIn(r"\input{chapter02_body}", out)
+        self.assertNotIn(r"\section{Intro}", out)
+
+
 class TestHeadingStyles(unittest.TestCase):
     def test_all_four_styles_have_rules(self):
         for style in ("SBL", "Chicago", "MLA", "APA"):

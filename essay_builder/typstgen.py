@@ -138,6 +138,24 @@ TYPST_LANG_HINTS: Dict[str, Dict[str, str]] = {
 }
 
 
+def _chapter_slug(title: str, index: int) -> str:
+    slug = "".join(c if c.isalnum() else "_" for c in title.lower()).strip("_")
+    return f"chapter{index:02d}_{slug}" if slug else f"chapter{index:02d}"
+
+
+def generate_chapter_file(title: str) -> str:
+    """Return a minimal standalone chapter body file (no preamble)."""
+    lines = [
+        f"// Chapter: {title}",
+        "",
+        f"= {title or 'Chapter'}",
+        "",
+        "// Write chapter content here. Use @citationkey to cite.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _format_date(raw: str) -> str:
     if not raw:
         return "#datetime.today().display()"
@@ -259,7 +277,7 @@ def generate(s: Dict[str, Any]) -> str:
     header_style    = s.get("header_style",   "auto")
     header_rule     = s.get("header_rule",    False)
 
-    bib_style  = TYPST_CIT_STYLES.get(cit, "chicago-notes")
+    bib_style  = s.get("typst_csl_style") or TYPST_CIT_STYLES.get(cit, "chicago-notes")
     font_name  = TYPST_FONTS.get(font_pkg)
     paper_name = TYPST_PAPER.get(paper, "us-letter")
     leading    = TYPST_LEADING.get(linespace, "0.9em")
@@ -389,6 +407,13 @@ def generate(s: Dict[str, Any]) -> str:
             L.append(line)
         L.append("")
 
+    custom_preamble = s.get("custom_typst_preamble", "").strip()
+    if custom_preamble:
+        L.append("// --- Custom show rules / preamble ---")
+        for line in custom_preamble.splitlines():
+            L.append(line)
+        L.append("")
+
     # Language hints
     if languages:
         L.append("// --- Language support ---")
@@ -450,15 +475,30 @@ def generate(s: Dict[str, Any]) -> str:
         L.append("#pagebreak()")
         L.append("")
 
-    # Body
+    chapters = s.get("chapters", [])
+    multifile = s.get("multifile", False)
+
     L.append("// --- Body ---")
     L.append("")
-    L.append("= Introduction")
-    L.append("")
-    L.append("// Begin writing here. Use @citationkey to cite.")
-    L.append("")
-    L.append("= Conclusion")
-    L.append("")
+    if chapters:
+        if multifile:
+            for i, ch in enumerate(chapters, 1):
+                slug = _chapter_slug(ch, i)
+                L.append(f'#include "{slug}.typ"')
+                L.append("")
+        else:
+            for ch in chapters:
+                L.append(f"= {ch or 'Untitled Chapter'}")
+                L.append("")
+                L.append("// Begin writing here. Use @citationkey to cite.")
+                L.append("")
+    else:
+        L.append("= Introduction")
+        L.append("")
+        L.append("// Begin writing here. Use @citationkey to cite.")
+        L.append("")
+        L.append("= Conclusion")
+        L.append("")
 
     if typst_notes == "endnote":
         L.append("")

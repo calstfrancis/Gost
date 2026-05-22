@@ -141,6 +141,9 @@ class GostWindow(Adw.ApplicationWindow):
         self._lang_switches: dict = {}
         self._preview_dirty = True
         self._compiling = False
+        self._live_preview_timeout: int | None = None
+        self._chapters: list = []
+        self._grammar_checking = False
 
         self._build_ui()
         self._check_compiler_deps()
@@ -212,6 +215,12 @@ class GostWindow(Adw.ApplicationWindow):
         profiles_btn.set_popover(self._profiles_popover)
         hbar.pack_start(profiles_btn)
 
+        packs_btn = Gtk.MenuButton(label="Packs")
+        packs_btn.add_css_class("flat")
+        self._packs_popover = self._build_style_packs_popover()
+        packs_btn.set_popover(self._packs_popover)
+        hbar.pack_start(packs_btn)
+
         import_btn = Gtk.Button(label="Import .tex")
         import_btn.add_css_class("flat")
         import_btn.connect("clicked", self._on_import_journal)
@@ -281,6 +290,9 @@ class GostWindow(Adw.ApplicationWindow):
             ("preferences-desktop-locale-symbolic", "Languages",            "languages"),
             ("emblem-documents-symbolic",           "Headers &amp; Footers","headers"),
             ("accessories-dictionary-symbolic",     "Bibliography",         "bib"),
+            ("view-list-ordered-symbolic",          "Chapters",             "chapters"),
+            ("text-editor-symbolic",                "Custom Code",          "custom_code"),
+            ("tools-check-spelling-symbolic",       "Grammar",              "grammar"),
             ("document-print-preview-symbolic",     "Preview",              "preview"),
         ]
         self._nav_rows: dict = {}
@@ -329,6 +341,9 @@ class GostWindow(Adw.ApplicationWindow):
         self._build_languages_panel()
         self._build_headers_panel()
         self._build_bib_panel()
+        self._build_chapters_panel()
+        self._build_custom_code_panel()
+        self._build_grammar_panel()
         self._build_preview_panel()
 
         self._nav_list.select_row(self._nav_list.get_row_at_index(0))
@@ -518,6 +533,23 @@ class GostWindow(Adw.ApplicationWindow):
             sw.set_active(key in s.get("typst_features", []))
         for key, sw in self._lang_switches.items():
             sw.set_active(key in s.get("languages", []))
+
+        # Chapters
+        self._chapters = list(s.get("chapters", []))
+        if hasattr(self, "_chapters_list_box"):
+            self._rebuild_chapters_ui()
+
+        # Custom preamble
+        if hasattr(self, "_r_custom_latex"):
+            buf = self._r_custom_latex.get_buffer()
+            buf.set_text(s.get("custom_latex_preamble", ""))
+        if hasattr(self, "_r_custom_typst"):
+            buf = self._r_custom_typst.get_buffer()
+            buf.set_text(s.get("custom_typst_preamble", ""))
+
+        # Typst CSL style override
+        if hasattr(self, "_r_typst_csl"):
+            self._r_typst_csl.set_text(s.get("typst_csl_style", ""))
 
         self._dirty_preview()
 
@@ -965,6 +997,31 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_cite_cmd.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_cite_cmd)
 
+        # LaTeX: manual biblatex style override
+        self._r_bib_style_row = self._r_bib_style  # alias for visibility toggling
+
+        # Typst: CSL style selector (hidden in LaTeX mode)
+        typst_grp = Adw.PreferencesGroup(title="Typst Bibliography Style")
+        box.append(typst_grp)
+
+        csl_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self._r_typst_csl = Gtk.Entry()
+        self._r_typst_csl.set_placeholder_text("e.g. chicago-notes, apa, ieee …")
+        self._r_typst_csl.set_hexpand(True)
+        self._r_typst_csl.connect("changed", lambda *_: self._dirty_preview())
+        csl_browse_btn = Gtk.Button(label="Browse CSL styles…")
+        csl_browse_btn.add_css_class("flat")
+        csl_browse_btn.connect("clicked", self._on_csl_browse)
+        csl_box.append(self._r_typst_csl)
+        csl_box.append(csl_browse_btn)
+
+        csl_row = Adw.ActionRow(title="CSL style override")
+        csl_row.set_subtitle("Overrides the default style for this citation format")
+        csl_row.add_suffix(csl_box)
+        csl_row.set_activatable_widget(self._r_typst_csl)
+        typst_grp.add(csl_row)
+        self._r_typst_csl_row = typst_grp  # group for visibility toggling
+
         banner = Adw.Banner(title=(
             "Export from Zotero via BetterBibTeX → Keep Updated, "
             "then paste the absolute path above."
@@ -1116,6 +1173,11 @@ class GostWindow(Adw.ApplicationWindow):
         mode = "compiled" if self._prev_mode_btns.get("compiled", Gtk.ToggleButton()).get_active() else "source"
         if mode == "source":
             self._refresh_source()
+        elif mode == "compiled" and self._preview_btn.get_sensitive():
+            # Cancel any pending debounce and start a fresh 600 ms timer
+            if self._live_preview_timeout is not None:
+                GLib.source_remove(self._live_preview_timeout)
+            self._live_preview_timeout = GLib.timeout_add(600, self._debounced_compile)
 
     # ------------------------------------------------------------------
     # Compiler dependency check
@@ -1329,6 +1391,26 @@ class GostWindow(Adw.ApplicationWindow):
             "typst_features": [k for k, r in self._typst_feature_switches.items() if r.get_active()],
             "languages":      [k for k, sw in self._lang_switches.items() if sw.get_active()],
             "format": self._format,
+
+            "chapters": list(self._chapters),
+
+            "custom_latex_preamble": (
+                self._r_custom_latex.get_buffer().get_text(
+                    self._r_custom_latex.get_buffer().get_start_iter(),
+                    self._r_custom_latex.get_buffer().get_end_iter(), False
+                ) if hasattr(self, "_r_custom_latex") else ""
+            ),
+            "custom_typst_preamble": (
+                self._r_custom_typst.get_buffer().get_text(
+                    self._r_custom_typst.get_buffer().get_start_iter(),
+                    self._r_custom_typst.get_buffer().get_end_iter(), False
+                ) if hasattr(self, "_r_custom_typst") else ""
+            ),
+
+            "typst_csl_style": (
+                self._r_typst_csl.get_text().strip()
+                if hasattr(self, "_r_typst_csl") else ""
+            ),
         }
 
     # ------------------------------------------------------------------
@@ -1394,6 +1476,14 @@ class GostWindow(Adw.ApplicationWindow):
             self._latex_features_grp.set_visible(is_latex)
         if hasattr(self, "_typst_features_grp"):
             self._typst_features_grp.set_visible(not is_latex)
+        if hasattr(self, "_latex_preamble_grp"):
+            self._latex_preamble_grp.set_visible(is_latex)
+        if hasattr(self, "_typst_preamble_grp"):
+            self._typst_preamble_grp.set_visible(not is_latex)
+        if hasattr(self, "_r_typst_csl_row"):
+            self._r_typst_csl_row.set_visible(not is_latex)
+        if hasattr(self, "_r_bib_style_row"):
+            self._r_bib_style_row.set_visible(is_latex)
         self._dirty_preview()
         self._check_compiler_deps()
 
@@ -1596,6 +1686,474 @@ class GostWindow(Adw.ApplicationWindow):
             timeout=6,
         )
         return False  # GLib.SOURCE_REMOVE
+
+    # ------------------------------------------------------------------
+    # Live preview debounce
+    # ------------------------------------------------------------------
+
+    def _debounced_compile(self):
+        self._live_preview_timeout = None
+        self._compile_preview()
+        return GLib.SOURCE_REMOVE
+
+    # ------------------------------------------------------------------
+    # Panel: Chapters
+    # ------------------------------------------------------------------
+
+    def _build_chapters_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        outer.set_margin_top(18); outer.set_margin_bottom(18)
+        outer.set_margin_start(18); outer.set_margin_end(18)
+        scroll.set_child(outer)
+
+        grp = Adw.PreferencesGroup(
+            title="Chapter List",
+            description="Add one entry per chapter. Export → single file generates section stubs; "
+                        "Export Folder writes one file per chapter.",
+        )
+        outer.append(grp)
+
+        self._chapters_grp = grp
+        self._chapters_list_box = Gtk.ListBox()
+        self._chapters_list_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._chapters_list_box.add_css_class("boxed-list")
+        outer.append(self._chapters_list_box)
+
+        add_btn = Gtk.Button(label="Add Chapter")
+        add_btn.add_css_class("pill")
+        add_btn.set_halign(Gtk.Align.START)
+        add_btn.connect("clicked", lambda *_: self._add_chapter())
+        outer.append(add_btn)
+
+        folder_btn = Gtk.Button(label="Export as Project Folder…")
+        folder_btn.add_css_class("suggested-action")
+        folder_btn.add_css_class("pill")
+        folder_btn.set_halign(Gtk.Align.START)
+        folder_btn.connect("clicked", self._on_export_folder)
+        outer.append(folder_btn)
+
+        self._rebuild_chapters_ui()
+        self._content_stack.add_named(scroll, "chapters")
+
+    def _rebuild_chapters_ui(self):
+        lb = self._chapters_list_box
+        child = lb.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            lb.remove(child)
+            child = nxt
+        for title in self._chapters:
+            self._add_chapter_row(title)
+
+    def _add_chapter(self, title: str = ""):
+        self._chapters.append(title)
+        self._add_chapter_row(title)
+        self._dirty_preview()
+
+    def _add_chapter_row(self, title: str):
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        row_box.set_margin_start(6); row_box.set_margin_end(6)
+        row_box.set_margin_top(4); row_box.set_margin_bottom(4)
+
+        entry = Gtk.Entry()
+        entry.set_text(title)
+        entry.set_hexpand(True)
+        entry.set_placeholder_text("Chapter title")
+
+        def _on_title_changed(e, idx=len(self._chapters) - 1):
+            if idx < len(self._chapters):
+                self._chapters[idx] = e.get_text()
+            self._dirty_preview()
+        entry.connect("changed", _on_title_changed)
+
+        del_btn = Gtk.Button()
+        del_btn.set_icon_name("list-remove-symbolic")
+        del_btn.add_css_class("flat")
+        del_btn.add_css_class("circular")
+
+        def _on_remove(_btn, _box=row_box, _entry=entry):
+            text = _entry.get_text()
+            if text in self._chapters:
+                self._chapters.remove(text)
+            elif "" in self._chapters:
+                self._chapters.remove("")
+            self._chapters_list_box.remove(_box.get_parent() or _box)
+            self._dirty_preview()
+        del_btn.connect("clicked", _on_remove)
+
+        row_box.append(entry)
+        row_box.append(del_btn)
+
+        list_row = Gtk.ListBoxRow()
+        list_row.set_child(row_box)
+        self._chapters_list_box.append(list_row)
+
+    def _on_export_folder(self, _btn):
+        if not self._chapters:
+            self._show_toast("Add chapters before exporting a project folder.", timeout=3)
+            return
+        dialog = Gtk.FileDialog(title="Choose project folder")
+        dialog.select_folder(self, None, self._on_export_folder_done)
+
+    def _on_export_folder_done(self, dialog, result):
+        import os
+        try:
+            gfile = dialog.select_folder_finish(result)
+        except GLib.Error:
+            return
+        folder = gfile.get_path()
+        if not folder:
+            return
+
+        state = self._collect_state()
+        is_typst = self._format == "typst"
+        ext = ".typ" if is_typst else ".tex"
+
+        # Generate main file with multifile flag
+        state["multifile"] = True
+        if is_typst:
+            from essay_builder.typstgen import generate as typst_gen, generate_chapter_file, _chapter_slug
+            main_src = typst_gen(state)
+        else:
+            from essay_builder.texgen import generate as tex_gen, generate_chapter_file, _chapter_slug
+            main_src = tex_gen(state)
+
+        try:
+            main_path = os.path.join(folder, "main" + ext)
+            with open(main_path, "w", encoding="utf-8") as f:
+                f.write(main_src)
+
+            cite_cmd = state.get("cite_cmd", "autocite")
+            for i, ch in enumerate(self._chapters, 1):
+                slug = _chapter_slug(ch, i)
+                ch_path = os.path.join(folder, slug + ext)
+                if is_typst:
+                    from essay_builder.typstgen import generate_chapter_file as gcf
+                    ch_src = gcf(ch)
+                else:
+                    from essay_builder.texgen import generate_chapter_file as gcf
+                    ch_src = gcf(ch, cite_cmd)
+                with open(ch_path, "w", encoding="utf-8") as f:
+                    f.write(ch_src)
+
+            if not is_typst:
+                self._write_latexmkrc(Gio.File.new_for_path(main_path))
+
+            n = len(self._chapters)
+            self._show_toast(
+                f"Exported main{ext} + {n} chapter file(s) to {os.path.basename(folder)}/",
+                timeout=4,
+            )
+        except OSError as e:
+            self._show_toast(f"Export failed: {e}", timeout=5)
+
+    # ------------------------------------------------------------------
+    # Panel: Custom Code
+    # ------------------------------------------------------------------
+
+    def _build_custom_code_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        outer.set_margin_top(18); outer.set_margin_bottom(18)
+        outer.set_margin_start(18); outer.set_margin_end(18)
+        scroll.set_child(outer)
+
+        def _make_code_area(placeholder: str) -> Gtk.TextView:
+            tv = Gtk.TextView()
+            tv.set_monospace(True)
+            tv.set_wrap_mode(Gtk.WrapMode.NONE)
+            tv.set_top_margin(8); tv.set_bottom_margin(8)
+            tv.set_left_margin(10); tv.set_right_margin(10)
+            tv.get_buffer().set_text(placeholder)
+            tv.get_buffer().connect("changed", lambda *_: self._dirty_preview())
+            return tv
+
+        # LaTeX preamble group
+        self._latex_preamble_grp = Adw.PreferencesGroup(
+            title="LaTeX Preamble Additions",
+            description="Inserted just before \\begin{document}. Use for custom \\usepackage, \\newcommand, etc.",
+        )
+        outer.append(self._latex_preamble_grp)
+        latex_sw = Gtk.ScrolledWindow()
+        latex_sw.set_min_content_height(160)
+        latex_sw.set_vexpand(False)
+        latex_sw.add_css_class("card")
+        self._r_custom_latex = _make_code_area("")
+        self._r_custom_latex.get_buffer().set_text("")
+        latex_sw.set_child(self._r_custom_latex)
+        self._latex_preamble_grp.add(latex_sw)
+
+        # Typst preamble group
+        self._typst_preamble_grp = Adw.PreferencesGroup(
+            title="Typst Show Rules / Preamble",
+            description="Inserted after heading show rules. Use for #show, #let, custom functions.",
+        )
+        outer.append(self._typst_preamble_grp)
+        typst_sw = Gtk.ScrolledWindow()
+        typst_sw.set_min_content_height(160)
+        typst_sw.set_vexpand(False)
+        typst_sw.add_css_class("card")
+        self._r_custom_typst = _make_code_area("")
+        self._r_custom_typst.get_buffer().set_text("")
+        typst_sw.set_child(self._r_custom_typst)
+        self._typst_preamble_grp.add(typst_sw)
+
+        self._content_stack.add_named(scroll, "custom_code")
+
+    # ------------------------------------------------------------------
+    # Panel: Grammar check (LanguageTool)
+    # ------------------------------------------------------------------
+
+    def _build_grammar_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        outer.set_margin_top(18); outer.set_margin_bottom(18)
+        outer.set_margin_start(18); outer.set_margin_end(18)
+        scroll.set_child(outer)
+
+        from essay_builder.languagetool import LANGUAGE_NAMES
+        grp = Adw.PreferencesGroup(
+            title="Grammar & Style Check",
+            description="Powered by LanguageTool (public API). Paste or type the text you want to check.",
+        )
+        outer.append(grp)
+
+        self._r_grammar_lang = _combo_row("Language", LANGUAGE_NAMES)
+        grp.add(self._r_grammar_lang)
+
+        api_row = Adw.EntryRow(title="API URL (blank = public)")
+        api_row.set_text("")
+        api_row.set_show_apply_button(False)
+        self._r_grammar_api = api_row
+        grp.add(api_row)
+
+        # Text input area
+        input_sw = Gtk.ScrolledWindow()
+        input_sw.set_min_content_height(140)
+        input_sw.set_vexpand(False)
+        input_sw.add_css_class("card")
+        self._r_grammar_input = Gtk.TextView()
+        self._r_grammar_input.set_wrap_mode(Gtk.WrapMode.WORD)
+        self._r_grammar_input.set_top_margin(8); self._r_grammar_input.set_bottom_margin(8)
+        self._r_grammar_input.set_left_margin(10); self._r_grammar_input.set_right_margin(10)
+        input_sw.set_child(self._r_grammar_input)
+
+        input_lbl = Gtk.Label(label="Text to check:")
+        input_lbl.set_xalign(0)
+        input_lbl.add_css_class("heading")
+        outer.append(input_lbl)
+        outer.append(input_sw)
+
+        btn_row = Gtk.Box(spacing=8)
+        check_btn = Gtk.Button(label="Check Grammar")
+        check_btn.add_css_class("suggested-action")
+        check_btn.connect("clicked", self._on_grammar_check)
+        self._grammar_spinner = Gtk.Spinner()
+        self._grammar_status = Gtk.Label(label="")
+        self._grammar_status.set_hexpand(True)
+        self._grammar_status.set_xalign(0)
+        self._grammar_status.add_css_class("dim-label")
+        btn_row.append(check_btn)
+        btn_row.append(self._grammar_spinner)
+        btn_row.append(self._grammar_status)
+        outer.append(btn_row)
+
+        self._grammar_results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        outer.append(self._grammar_results_box)
+
+        self._content_stack.add_named(scroll, "grammar")
+
+    def _on_grammar_check(self, _btn):
+        if self._grammar_checking:
+            return
+        buf = self._r_grammar_input.get_buffer()
+        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+        if not text.strip():
+            self._show_toast("Paste some text to check first.", timeout=2)
+            return
+
+        from essay_builder.languagetool import LANGUAGE_CODES
+        lang_idx = self._r_grammar_lang.get_selected()
+        lang = LANGUAGE_CODES[lang_idx] if lang_idx < len(LANGUAGE_CODES) else "en-US"
+        api_url = self._r_grammar_api.get_text().strip() or None
+
+        self._grammar_checking = True
+        self._grammar_spinner.start()
+        self._grammar_status.set_text("Checking…")
+
+        child = self._grammar_results_box.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            self._grammar_results_box.remove(child)
+            child = nxt
+
+        import threading as _thr
+        t = _thr.Thread(
+            target=self._grammar_thread,
+            args=(text, lang, api_url),
+            daemon=True,
+        )
+        t.start()
+
+    def _grammar_thread(self, text: str, lang: str, api_url):
+        from essay_builder.languagetool import check_text, PUBLIC_API
+        url = api_url or PUBLIC_API
+        matches, err = check_text(text, lang, url)
+        GLib.idle_add(self._grammar_done, matches, err)
+
+    def _grammar_done(self, matches: list, err: str):
+        self._grammar_checking = False
+        self._grammar_spinner.stop()
+
+        if err:
+            self._grammar_status.set_text(f"Error: {err[:80]}")
+            return
+
+        if not matches:
+            self._grammar_status.set_text("No issues found.")
+            return
+
+        self._grammar_status.set_text(f"{len(matches)} issue(s) found")
+
+        for m in matches:
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            card.add_css_class("card")
+            card.set_margin_top(2)
+            card.set_margin_bottom(2)
+
+            msg_lbl = Gtk.Label(label=m["message"])
+            msg_lbl.set_xalign(0)
+            msg_lbl.set_wrap(True)
+            msg_lbl.add_css_class("body")
+            card.append(msg_lbl)
+
+            if m.get("context"):
+                ctx_lbl = Gtk.Label(label=f'  "{m["context"]}"')
+                ctx_lbl.set_xalign(0)
+                ctx_lbl.set_wrap(True)
+                ctx_lbl.add_css_class("monospace")
+                ctx_lbl.add_css_class("dim-label")
+                card.append(ctx_lbl)
+
+            if m.get("replacements"):
+                sug = "Suggestions: " + " · ".join(m["replacements"])
+                sug_lbl = Gtk.Label(label=sug)
+                sug_lbl.set_xalign(0)
+                sug_lbl.add_css_class("caption")
+                card.append(sug_lbl)
+
+            self._grammar_results_box.append(card)
+        return GLib.SOURCE_REMOVE
+
+    # ------------------------------------------------------------------
+    # Style packs popover
+    # ------------------------------------------------------------------
+
+    def _build_style_packs_popover(self) -> Gtk.Popover:
+        from essay_builder.style_packs import STYLE_PACKS
+        pop = Gtk.Popover()
+        pop.set_has_arrow(True)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        outer.set_margin_top(10); outer.set_margin_bottom(10)
+        outer.set_margin_start(10); outer.set_margin_end(10)
+        outer.set_size_request(320, -1)
+
+        title_lbl = Gtk.Label(label="Apply a style pack")
+        title_lbl.add_css_class("heading")
+        title_lbl.set_xalign(0)
+        outer.append(title_lbl)
+
+        self._packs_list = Gtk.ListBox()
+        self._packs_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._packs_list.add_css_class("boxed-list")
+
+        for name, vals in STYLE_PACKS.items():
+            row = Adw.ActionRow(title=name)
+            apply_btn = Gtk.Button(label="Apply")
+            apply_btn.add_css_class("flat")
+            apply_btn.add_css_class("pill")
+            apply_btn.set_valign(Gtk.Align.CENTER)
+            apply_btn.connect("clicked", lambda _b, n=name: self._on_style_pack_apply(n))
+            row.add_suffix(apply_btn)
+            self._packs_list.append(row)
+
+        outer.append(self._packs_list)
+        pop.set_child(outer)
+        return pop
+
+    def _on_style_pack_apply(self, pack_name: str):
+        from essay_builder.style_packs import STYLE_PACKS
+        pack = STYLE_PACKS.get(pack_name)
+        if not pack:
+            return
+        current = self._collect_state()
+        current.update(pack)
+        self._apply_state(current)
+        self._packs_popover.popdown()
+        self._show_toast(f"Applied: {pack_name}", timeout=2)
+
+    # ------------------------------------------------------------------
+    # CSL style browser
+    # ------------------------------------------------------------------
+
+    def _on_csl_browse(self, _btn):
+        from essay_builder.csl_styles import CSL_STYLES
+        dlg = Adw.Dialog()
+        dlg.set_title("Browse CSL Styles")
+        dlg.set_content_width(420)
+        dlg.set_content_height(540)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        hbar = Adw.HeaderBar()
+        hbar.set_show_end_title_buttons(False)
+        outer.append(hbar)
+
+        search = Gtk.SearchEntry()
+        search.set_margin_top(8); search.set_margin_bottom(8)
+        search.set_margin_start(12); search.set_margin_end(12)
+        outer.append(search)
+
+        sw = Gtk.ScrolledWindow(vexpand=True)
+        lb = Gtk.ListBox()
+        lb.set_selection_mode(Gtk.SelectionMode.NONE)
+        lb.add_css_class("boxed-list")
+        lb.set_margin_start(12); lb.set_margin_end(12)
+        lb.set_margin_bottom(12)
+
+        rows = []
+        for display, style_id in CSL_STYLES:
+            row = Adw.ActionRow(title=display, subtitle=style_id)
+            use_btn = Gtk.Button(label="Use")
+            use_btn.add_css_class("flat")
+            use_btn.set_valign(Gtk.Align.CENTER)
+            use_btn.connect(
+                "clicked",
+                lambda _b, sid=style_id, dname=display, d=dlg: self._apply_csl_style(sid, dname, d),
+            )
+            row.add_suffix(use_btn)
+            lb.append(row)
+            rows.append((display.lower(), style_id.lower(), row))
+
+        def _filter(entry):
+            q = entry.get_text().lower()
+            for disp, sid, row in rows:
+                row.set_visible(not q or q in disp or q in sid)
+        search.connect("search-changed", _filter)
+
+        sw.set_child(lb)
+        outer.append(sw)
+        dlg.set_child(outer)
+        dlg.present(self)
+
+    def _apply_csl_style(self, style_id: str, display: str, dlg):
+        if hasattr(self, "_r_typst_csl"):
+            self._r_typst_csl.set_text(style_id)
+        dlg.close()
+        self._show_toast(f"CSL style: {display}", timeout=2)
+
+    # ------------------------------------------------------------------
 
     def _show_toast(self, msg: str, timeout: int = 2):
         if self._toast_overlay:
