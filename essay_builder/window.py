@@ -1,0 +1,1532 @@
+"""
+window.py — GTK4 / libadwaita UI for Gost.
+"""
+
+import datetime
+import threading
+from typing import List
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Gio
+
+from essay_builder.texgen import generate, STYLE_DEFAULTS, FONT_OPTIONS
+from essay_builder.typstgen import generate as typst_generate
+from essay_builder.config import Config
+from essay_builder.logger import get_logger
+
+# ---------------------------------------------------------------------------
+
+def _switch_row(title: str, subtitle: str = "") -> Adw.SwitchRow:
+    row = Adw.SwitchRow(title=title)
+    if subtitle:
+        row.set_subtitle(subtitle)
+    return row
+
+
+def _entry_row(title: str, placeholder: str = "") -> Adw.EntryRow:
+    row = Adw.EntryRow(title=title)
+    if placeholder:
+        row.set_text(placeholder)
+    return row
+
+
+def _combo_row(title: str, options: List[str]) -> Adw.ComboRow:
+    row = Adw.ComboRow(title=title)
+    model = Gtk.StringList()
+    for opt in options:
+        model.append(opt)
+    row.set_model(model)
+    return row
+
+
+def _spin_row(title: str, low: float, high: float, step: float, val: float) -> Adw.SpinRow:
+    adj = Gtk.Adjustment(value=val, lower=low, upper=high, step_increment=step)
+    row = Adw.SpinRow(title=title, adjustment=adj, digits=0 if step >= 1 else 2)
+    return row
+
+
+def _png_bytes_to_texture(data: bytes) -> Gdk.Texture:
+    loader = GdkPixbuf.PixbufLoader()
+    loader.write(data)
+    loader.close()
+    return Gdk.Texture.new_for_pixbuf(loader.get_pixbuf())
+
+
+# ---------------------------------------------------------------------------
+# Feature / language constants
+# ---------------------------------------------------------------------------
+
+LATEX_FEATURES = [
+    ("dropcaps",     "Drop caps (lettrine)",         r"Decorative \lettrine{L}{etter} first letters"),
+    ("marginalia",   "Marginalia (marginnote)",       r"\marginnote{} for margin notes"),
+    ("csquotes",     "Smart quotes (csquotes)",       "Contextual quotation marks; recommended with biblatex"),
+    ("xcolor",       "Color support (xcolor)",        r"\textcolor{}{} and named colors (dvipsnames)"),
+    ("listings",     "Code listings (listings)",      "Typeset source code with syntax highlighting"),
+    ("enumitem",     "Enhanced lists (enumitem)",     "Customizable enumerate, itemize, description"),
+    ("booktabs",     "Better tables (booktabs)",      "Publication-quality horizontal rules"),
+    ("siunitx",      "SI units (siunitx)",            r"\qty{10}{\metre}, \num{1.5e3}"),
+    ("epigraph_pkg", "Epigraph (epigraph)",           r"\epigraph{text}{source} command"),
+    ("lineno",       "Line numbers (lineno)",          "Margin line numbers for peer review"),
+    ("todonotes",    "Todo notes (todonotes)",         r"\todo{} margin annotations"),
+]
+
+TYPST_FEATURES = [
+    ("dropcaps",   "Drop caps (droplet)",           "Decorative first-letter drop caps"),
+    ("marginalia", "Margin notes",                  "Place notes with #place(right + top)[…]"),
+    ("codly",      "Code listings (codly)",         "Syntax-highlighted code blocks"),
+    ("showybox",   "Styled boxes (showybox)",       "Colored / framed content boxes"),
+    ("gentle",     "Callout boxes (gentle-clues)",  "Info, warning, tip callout blocks"),
+    ("tablex",     "Enhanced tables (tablex)",      "Column/row spans and merged cells"),
+    ("drafting",   "Margin annotations (drafting)", "Margin annotations for draft review"),
+]
+
+LANGUAGES = [
+    ("russian",  "Russian",       "polyglossia / babel + Cyrillic fonts"),
+    ("hebrew",   "Hebrew",        "polyglossia; right-to-left support"),
+    ("japanese", "Japanese",      "xeCJK (XeLaTeX) or luatexja (LuaLaTeX)"),
+    ("tibetan",  "Tibetan",       "polyglossia + Tibetan font"),
+    ("sanskrit", "Sanskrit",      "polyglossia + Devanagari font"),
+    ("greek",    "Ancient Greek", "polyglossia variant: ancient"),
+    ("chinese",  "Chinese",       "xeCJK (XeLaTeX) or luatexja (LuaLaTeX)"),
+]
+
+HEADER_STYLE_KEYS = [
+    "auto", "none", "pagenum_bottom",
+    "title_left", "section_left", "author_left", "doublesided",
+]
+HEADER_STYLE_LABELS = [
+    "Auto (follows citation style)",
+    "None",
+    "Page numbers only (bottom centre)",
+    "Title  ·  Page number",
+    "Section title  ·  Page number",
+    "Author  ·  Page number",
+    "Double-sided (section / page alternating)",
+]
+
+
+# ---------------------------------------------------------------------------
+# Main Window
+# ---------------------------------------------------------------------------
+
+class GostWindow(Adw.ApplicationWindow):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.set_title("Gost")
+
+        self._config = Config()
+        width, height = self._config.get_window_size()
+        self.set_default_size(width, height)
+
+        self._cit_style = self._config.get("citation_style", "SBL")
+        self._engine    = self._config.get("engine", "xelatex")
+        self._font_size = self._config.get("font_size", "11pt")
+        self._paper     = self._config.get("paper", "letterpaper")
+
+        logger = get_logger()
+        logger.info(f"Loaded settings: engine={self._engine}, style={self._cit_style}")
+
+        self._toast_overlay: Adw.ToastOverlay | None = None
+        self._format = "typst"
+        self._copy_btn: Gtk.Button | None = None
+        self._gost_font_provider = None
+        self._latex_only_widgets: List[Gtk.Widget] = []
+        self._latex_feature_switches: dict = {}
+        self._typst_feature_switches: dict = {}
+        self._lang_switches: dict = {}
+        self._preview_dirty = True
+        self._compiling = False
+
+        self._build_ui()
+
+        # Apply saved GOST font preference on startup
+        if self._config.get("use_gost_font", False):
+            self._apply_gost_font(True)
+
+        self.connect("notify::default-width",  self._on_window_resize)
+        self.connect("notify::default-height", self._on_window_resize)
+
+    def _on_window_resize(self, widget, param):
+        w = self.get_default_width()
+        h = self.get_default_height()
+        if w > 0 and h > 0:
+            self._config.set_window_size(w, h)
+
+    def _on_gost_font_toggled(self, switch, _param):
+        active = switch.get_active()
+        self._config.set("use_gost_font", active)
+        self._apply_gost_font(active)
+
+    def _apply_gost_font(self, active: bool):
+        display = Gdk.Display.get_default()
+        if active:
+            if self._gost_font_provider is None:
+                self._gost_font_provider = Gtk.CssProvider()
+                self._gost_font_provider.load_from_data(
+                    b'* { font-family: "GOST type B", "GOST Type B", monospace; }'
+                )
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                self._gost_font_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+            )
+        else:
+            if self._gost_font_provider is not None:
+                Gtk.StyleContext.remove_provider_for_display(
+                    display,
+                    self._gost_font_provider,
+                )
+
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
+
+    def _build_ui(self):
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._toast_overlay = Adw.ToastOverlay()
+        self._toast_overlay.set_child(outer)
+        self.set_content(self._toast_overlay)
+
+        # ---- Header bar ----
+        hbar = Adw.HeaderBar()
+        hbar.set_show_end_title_buttons(True)
+        hbar.set_title_widget(Adw.WindowTitle(
+            title="Gost",
+            subtitle="Academic Essay Templater"
+        ))
+
+        self._copy_btn = Gtk.Button(label="Copy Typst")
+        self._copy_btn.add_css_class("flat")
+        self._copy_btn.connect("clicked", self._on_copy)
+        hbar.pack_start(self._copy_btn)
+
+        profiles_btn = Gtk.MenuButton(label="Profiles")
+        profiles_btn.add_css_class("flat")
+        self._profiles_popover = self._build_profiles_popover()
+        profiles_btn.set_popover(self._profiles_popover)
+        hbar.pack_start(profiles_btn)
+
+        import_btn = Gtk.Button(label="Import .tex")
+        import_btn.add_css_class("flat")
+        import_btn.connect("clicked", self._on_import_journal)
+        hbar.pack_start(import_btn)
+
+        export_btn = Gtk.Button(label="Export")
+        export_btn.add_css_class("suggested-action")
+        export_btn.connect("clicked", self._on_export)
+        hbar.pack_end(export_btn)
+
+        preview_btn = Gtk.Button(label="Preview")
+        preview_btn.add_css_class("flat")
+        preview_btn.connect("clicked", self._on_preview_btn)
+        hbar.pack_end(preview_btn)
+
+        about_btn = Gtk.Button()
+        about_btn.set_icon_name("help-about-symbolic")
+        about_btn.add_css_class("flat")
+        about_btn.connect("clicked", self._show_about)
+        hbar.pack_end(about_btn)
+
+        # Format toggle
+        fmt_box = Gtk.Box(spacing=0)
+        fmt_box.add_css_class("linked")
+        fmt_box.set_valign(Gtk.Align.CENTER)
+        self._fmt_btns: dict = {}
+        fmt_group = None
+        for fmt_key, fmt_label in (("typst", "Typst"), ("latex", "LaTeX")):
+            btn = Gtk.ToggleButton(label=fmt_label)
+            if fmt_group is None:
+                fmt_group = btn
+            else:
+                btn.set_group(fmt_group)
+            btn._fmt_key = fmt_key
+            btn.connect("toggled", self._on_format_toggled)
+            fmt_box.append(btn)
+            self._fmt_btns[fmt_key] = btn
+        hbar.pack_end(fmt_box)
+
+        outer.append(hbar)
+
+        # ---- Navigation split view ----
+        self._nav_view = Adw.NavigationSplitView()
+        self._nav_view.set_vexpand(True)
+        self._nav_view.set_hexpand(True)
+        outer.append(self._nav_view)
+
+        sidebar_page = Adw.NavigationPage(title="Sections")
+        sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        sidebar_page.set_child(sidebar_box)
+
+        sidebar_hbar = Adw.HeaderBar()
+        sidebar_hbar.set_show_end_title_buttons(False)
+        sidebar_box.append(sidebar_hbar)
+
+        self._nav_list = Gtk.ListBox()
+        self._nav_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._nav_list.add_css_class("navigation-sidebar")
+        self._nav_list.set_vexpand(True)
+        self._nav_list.connect("row-selected", self._on_nav_selected)
+
+        nav_items = [
+            ("document-edit-symbolic",              "Title &amp; Authors",  "metadata"),
+            ("document-properties-symbolic",        "Citation Style",       "style"),
+            ("view-grid-symbolic",                  "Layout &amp; Spacing", "layout"),
+            ("application-x-addon-symbolic",        "Extra Packages",       "features"),
+            ("preferences-desktop-locale-symbolic", "Languages",            "languages"),
+            ("emblem-documents-symbolic",           "Headers &amp; Footers","headers"),
+            ("accessories-dictionary-symbolic",     "Bibliography",         "bib"),
+            ("document-print-preview-symbolic",     "Preview",              "preview"),
+        ]
+        self._nav_rows: dict = {}
+        for icon, label, key in nav_items:
+            row = Adw.ActionRow(title=label)
+            row.add_prefix(Gtk.Image.new_from_icon_name(icon))
+            row.set_activatable(True)
+            row._nav_key = key
+            self._nav_list.append(row)
+            self._nav_rows[key] = row
+
+        sidebar_box.append(self._nav_list)
+
+        # GOST Type B font toggle
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        sep.set_margin_top(4)
+        sidebar_box.append(sep)
+        font_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        font_row.set_margin_start(12)
+        font_row.set_margin_end(12)
+        font_row.set_margin_top(8)
+        font_row.set_margin_bottom(8)
+        font_lbl = Gtk.Label(label="GOST Type B font")
+        font_lbl.set_hexpand(True)
+        font_lbl.set_xalign(0)
+        self._gost_font_switch = Gtk.Switch()
+        self._gost_font_switch.set_valign(Gtk.Align.CENTER)
+        self._gost_font_switch.set_active(self._config.get("use_gost_font", False))
+        self._gost_font_switch.connect("notify::active", self._on_gost_font_toggled)
+        font_row.append(font_lbl)
+        font_row.append(self._gost_font_switch)
+        sidebar_box.append(font_row)
+
+        self._nav_view.set_sidebar(sidebar_page)
+
+        content_page = Adw.NavigationPage(title="Gost")
+        self._content_stack = Gtk.Stack()
+        self._content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        content_page.set_child(self._content_stack)
+        self._nav_view.set_content(content_page)
+
+        self._build_metadata_panel()
+        self._build_style_panel()
+        self._build_layout_panel()
+        self._build_features_panel()
+        self._build_languages_panel()
+        self._build_headers_panel()
+        self._build_bib_panel()
+        self._build_preview_panel()
+
+        self._nav_list.select_row(self._nav_list.get_row_at_index(0))
+
+        # Apply initial format AFTER all panels are built so visibility is correct
+        self._fmt_btns[self._format].set_active(True)
+
+        # CSS for compiled-preview page cards (white background + shadow,
+        # so pages look correct regardless of whether GTK theme is dark or light)
+        css = Gtk.CssProvider()
+        css.load_from_data(b"""
+.preview-page-card {
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+    border-radius: 2px;
+    margin: 4px 16px;
+}
+""")
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    # ------------------------------------------------------------------
+    # Profiles popover
+    # ------------------------------------------------------------------
+
+    def _build_profiles_popover(self) -> Gtk.Popover:
+        popover = Gtk.Popover()
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        outer.set_margin_top(12); outer.set_margin_bottom(12)
+        outer.set_margin_start(12); outer.set_margin_end(12)
+        outer.set_size_request(240, -1)
+
+        save_box = Gtk.Box(spacing=6)
+        self._profile_name_entry = Gtk.Entry()
+        self._profile_name_entry.set_placeholder_text("Profile name…")
+        self._profile_name_entry.set_hexpand(True)
+        save_btn = Gtk.Button(label="Save")
+        save_btn.add_css_class("suggested-action")
+        save_btn.connect("clicked", self._on_profile_save)
+        save_box.append(self._profile_name_entry)
+        save_box.append(save_btn)
+        outer.append(save_box)
+
+        outer.append(Gtk.Separator())
+
+        self._profile_list = Gtk.ListBox()
+        self._profile_list.add_css_class("boxed-list")
+        self._profile_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        outer.append(self._profile_list)
+
+        action_box = Gtk.Box(spacing=6)
+        load_btn = Gtk.Button(label="Load")
+        load_btn.set_hexpand(True)
+        load_btn.connect("clicked", self._on_profile_load)
+        del_btn = Gtk.Button(label="Delete")
+        del_btn.add_css_class("destructive-action")
+        del_btn.set_hexpand(True)
+        del_btn.connect("clicked", self._on_profile_delete)
+        action_box.append(load_btn)
+        action_box.append(del_btn)
+        outer.append(action_box)
+
+        popover.set_child(outer)
+        popover.connect("show", lambda *_: self._rebuild_profile_list())
+        return popover
+
+    def _rebuild_profile_list(self):
+        while self._profile_list.get_row_at_index(0) is not None:
+            self._profile_list.remove(self._profile_list.get_row_at_index(0))
+        for name in sorted(self._config.get_profiles().keys()):
+            row = Adw.ActionRow(title=name)
+            row._profile_name = name
+            self._profile_list.append(row)
+
+    def _on_profile_save(self, _btn):
+        name = self._profile_name_entry.get_text().strip()
+        if not name:
+            self._show_toast("Enter a profile name first")
+            return
+        self._config.save_profile(name, self._collect_state())
+        self._rebuild_profile_list()
+        self._profile_name_entry.set_text("")
+        self._show_toast(f'Saved profile "{name}"')
+
+    def _on_profile_load(self, _btn):
+        row = self._profile_list.get_selected_row()
+        if row is None:
+            self._show_toast("Select a profile to load")
+            return
+        state = self._config.get_profiles().get(row._profile_name)
+        if state:
+            self._apply_state(state)
+            self._profiles_popover.popdown()
+            self._show_toast(f'Loaded profile "{row._profile_name}"')
+        else:
+            self._show_toast("Profile not found")
+
+    def _on_profile_delete(self, _btn):
+        row = self._profile_list.get_selected_row()
+        if row is None:
+            self._show_toast("Select a profile to delete")
+            return
+        name = row._profile_name
+        self._config.delete_profile(name)
+        self._rebuild_profile_list()
+        self._show_toast(f'Deleted profile "{name}"')
+
+    def _apply_state(self, s: dict):
+        self._r_title.set_text(s.get("title", ""))
+        self._r_subtitle.set_text(s.get("subtitle", ""))
+        self._r_authors.set_text(s.get("authors", ""))
+        self._r_affil.set_text(s.get("affiliation", ""))
+        self._r_course.set_text(s.get("course", ""))
+        self._date_entry.set_text(s.get("date", ""))
+        self._r_bib_file.set_text(s.get("bib_file", ""))
+        self._r_bib_heading.set_text(s.get("bib_heading", "Bibliography"))
+
+        self._r_abstract.set_active(s.get("has_abstract", False))
+        self._r_keywords.set_active(s.get("has_keywords", False))
+        self._r_toc.set_active(s.get("use_toc", False))
+        self._r_numbered.set_active(s.get("numbered_heads", False))
+        self._r_style_headings.set_active(s.get("use_style_headings", True))
+        self._r_use_parts.set_active(s.get("use_parts", False))
+        self._r_print_bib.set_active(s.get("print_bib", True))
+        self._r_microtype.set_active(s.get("microtype", True))
+        self._r_use_multicol.set_active(s.get("use_multicol", False))
+        self._r_col_rule.set_active(s.get("col_rule", False))
+        self._r_header_rule.set_active(s.get("header_rule", False))
+        self._r_suppress_first.set_active(s.get("suppress_first_header", True))
+
+        self._r_margin.set_value(float(s.get("margin", 1.0)))
+        self._r_parindent.set_value(float(s.get("parindent", 1.5)))
+        self._r_parskip.set_value(float(s.get("parskip", 0)))
+        self._r_num_cols.set_value(float(s.get("num_cols", 2)))
+        self._r_col_sep.set_value(float(s.get("col_sep", 14)))
+
+        cit = s.get("cit_style", "SBL")
+        if cit in self._style_btns:
+            self._style_btns[cit].set_active(True)
+        self._r_bib_style.set_text(s.get("biblatex_style", ""))
+        self._r_notes.set_selected({"footnote": 0, "endnote": 1, "none": 2}.get(
+            s.get("notes_mode", "footnote"), 0))
+        self._r_typst_notes.set_selected(
+            0 if s.get("typst_notes", "footnote") == "footnote" else 1)
+
+        eng_label = {"pdflatex": "pdfLaTeX", "xelatex": "XeLaTeX", "lualatex": "LuaLaTeX"}.get(
+            s.get("engine", "xelatex"), "XeLaTeX")
+        if eng_label in self._engine_btns:
+            self._engine_btns[eng_label].set_active(True)
+
+        paper = s.get("paper", "letterpaper")
+        if paper in self._paper_btns:
+            self._paper_btns[paper].set_active(True)
+
+        fs = s.get("font_size", "11pt")
+        if fs in self._fs_btns:
+            self._fs_btns[fs].set_active(True)
+
+        self._r_encoding.set_selected({"utf8": 0, "latin1": 1}.get(s.get("encoding", "utf8"), 0))
+
+        font_key = s.get("font_pkg", "ebgaramond")
+        for i, opt in enumerate(FONT_OPTIONS):
+            if opt["key"] == font_key:
+                self._r_font_pkg.set_selected(i)
+                break
+
+        self._r_linespace.set_selected({"1": 0, "1.5": 1, "2": 2}.get(s.get("linespace", "1.5"), 1))
+        self._r_bib_sort.set_selected(
+            {"nyt": 0, "nty": 1, "none": 2, "ynt": 3}.get(s.get("bib_sort", "nyt"), 0))
+        self._r_cite_cmd.set_selected(
+            {"autocite": 0, "footcite": 1, "parencite": 2, "cite": 3}.get(s.get("cite_cmd", "autocite"), 0))
+
+        hs = s.get("header_style", "auto")
+        self._r_header_style.set_selected(
+            HEADER_STYLE_KEYS.index(hs) if hs in HEADER_STYLE_KEYS else 0)
+
+        fmt = s.get("format", "typst")
+        if fmt in self._fmt_btns:
+            self._fmt_btns[fmt].set_active(True)
+
+        for key, sw in self._latex_feature_switches.items():
+            sw.set_active(key in s.get("latex_features", []))
+        for key, sw in self._typst_feature_switches.items():
+            sw.set_active(key in s.get("typst_features", []))
+        for key, sw in self._lang_switches.items():
+            sw.set_active(key in s.get("languages", []))
+
+        self._dirty_preview()
+
+    # ------------------------------------------------------------------
+    # Panel: Title & Authors
+    # ------------------------------------------------------------------
+
+    def _build_metadata_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        grp = Adw.PreferencesGroup(title="Document Identity")
+        box.append(grp)
+
+        self._r_title    = _entry_row("Title")
+        self._r_subtitle = _entry_row("Subtitle", "optional")
+        self._r_authors  = _entry_row("Author(s)", "Comma-separated for multiple")
+        self._r_affil    = _entry_row("Affiliation", "Atlantic School of Theology")
+        self._r_course   = _entry_row("Course / Context", "e.g. THEO 5210")
+
+        saved_authors = self._config.get("authors", "")
+        if saved_authors:
+            self._r_authors.set_text(saved_authors)
+
+        for r in (self._r_title, self._r_subtitle, self._r_affil, self._r_course):
+            r.connect("changed", lambda *_: self._dirty_preview())
+        self._r_authors.connect("changed", self._on_authors_changed)
+
+        for r in (self._r_title, self._r_subtitle, self._r_authors, self._r_affil, self._r_course):
+            grp.add(r)
+
+        date_row = Adw.ActionRow(title="Date")
+        self._date_entry = Gtk.Entry()
+        self._date_entry.set_placeholder_text(r"YYYY-MM-DD  or  leave blank for \today")
+        self._date_entry.set_valign(Gtk.Align.CENTER)
+        self._date_entry.set_hexpand(True)
+        self._date_entry.connect("changed", lambda *_: self._dirty_preview())
+        today_btn = Gtk.Button(label="Today")
+        today_btn.set_valign(Gtk.Align.CENTER)
+        today_btn.add_css_class("flat")
+        today_btn.connect("clicked", self._set_today)
+        date_row.add_suffix(self._date_entry)
+        date_row.add_suffix(today_btn)
+        grp.add(date_row)
+
+        grp2 = Adw.PreferencesGroup(title="Front Matter")
+        box.append(grp2)
+        self._r_abstract = _switch_row("Include abstract block")
+        self._r_keywords = _switch_row("Include keywords line")
+        self._r_toc      = _switch_row(
+            "Table of contents",
+            r"Inserts \tableofcontents / #outline()"
+        )
+        for r in (self._r_abstract, self._r_keywords, self._r_toc):
+            r.connect("notify::active", lambda *_: self._dirty_preview())
+            grp2.add(r)
+
+        self._content_stack.add_named(scroll, "metadata")
+
+    def _on_authors_changed(self, row):
+        self._config.set("authors", row.get_text())
+        self._dirty_preview()
+
+    # ------------------------------------------------------------------
+    # Panel: Citation Style
+    # ------------------------------------------------------------------
+
+    def _build_style_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        grp = Adw.PreferencesGroup(title="Citation &amp; Formatting Style")
+        box.append(grp)
+
+        style_row = Adw.ActionRow(title="Base style")
+        style_box = Gtk.Box(spacing=4)
+        style_box.set_valign(Gtk.Align.CENTER)
+        self._style_btns: dict = {}
+        style_group = None
+        for s in ("SBL", "Chicago", "MLA", "APA"):
+            btn = Gtk.ToggleButton(label=s)
+            btn.add_css_class("flat")
+            if style_group is None:
+                style_group = btn
+            else:
+                btn.set_group(style_group)
+            btn._style_key = s
+            btn.connect("toggled", self._on_style_toggled)
+            style_box.append(btn)
+            self._style_btns[s] = btn
+        style_row.add_suffix(style_box)
+        grp.add(style_row)
+
+        self._r_bib_style = _entry_row("BibLaTeX style string")
+        self._r_bib_style.set_text("verbose-note")
+        self._r_bib_style.connect("changed", lambda *_: self._dirty_preview())
+        grp.add(self._r_bib_style)
+        self._latex_only_widgets.append(self._r_bib_style)
+
+        self._r_notes = _combo_row("Notes mode (LaTeX)", ["Footnotes", "Endnotes", "None"])
+        self._r_notes.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_notes)
+        self._latex_only_widgets.append(self._r_notes)
+
+        self._r_typst_notes = _combo_row("Notes mode (Typst)", ["Footnotes", "Endnotes"])
+        self._r_typst_notes.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_typst_notes)
+        # will be shown/hidden by _on_format_toggled; start hidden (format starts as typst)
+        self._r_typst_notes.set_visible(True)  # visible for typst
+
+        self._r_numbered = _switch_row("Heading numbering")
+        self._r_numbered.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_numbered)
+
+        self._r_style_headings = _switch_row(
+            "Style-appropriate headings",
+            "Apply titlesec / #show heading rules for the chosen style"
+        )
+        self._r_style_headings.set_active(True)
+        self._r_style_headings.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_style_headings)
+
+        self._r_use_parts = _switch_row(r"Include \part level")
+        self._r_use_parts.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_use_parts)
+        self._latex_only_widgets.append(self._r_use_parts)
+
+        grp2 = Adw.PreferencesGroup(title="Font &amp; Encoding")
+        box.append(grp2)
+
+        font_display_names = [opt["display"] for opt in FONT_OPTIONS]
+        self._r_font_pkg = _combo_row("Font", font_display_names)
+        self._r_font_pkg.connect("notify::selected", self._on_font_selected)
+        grp2.add(self._r_font_pkg)
+
+        self._r_engine_row = Adw.ActionRow(title="Engine")
+        eng_box = Gtk.Box(spacing=4)
+        eng_box.set_valign(Gtk.Align.CENTER)
+        self._engine_btns: dict = {}
+        eng_group = None
+        for e in ("pdfLaTeX", "XeLaTeX", "LuaLaTeX"):
+            btn = Gtk.ToggleButton(label=e)
+            btn.add_css_class("flat")
+            if eng_group is None:
+                eng_group = btn
+            else:
+                btn.set_group(eng_group)
+            btn._eng_key = e
+            btn.connect("toggled", self._on_engine_toggled)
+            eng_box.append(btn)
+            self._engine_btns[e] = btn
+        self._engine_btns["XeLaTeX"].set_active(True)
+        self._r_engine_row.add_suffix(eng_box)
+        grp2.add(self._r_engine_row)
+        self._latex_only_widgets.append(self._r_engine_row)
+
+        self._r_encoding = _combo_row("Input encoding", ["utf8", "latin1"])
+        self._r_encoding.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp2.add(self._r_encoding)
+        self._latex_only_widgets.append(self._r_encoding)
+
+        self._style_btns["SBL"].set_active(True)
+        self._content_stack.add_named(scroll, "style")
+
+    def _on_font_selected(self, *args):
+        self._check_font_engine_compatibility()
+        self._dirty_preview()
+
+    def _check_font_engine_compatibility(self):
+        if self._format == "typst":
+            return
+        selected = self._r_font_pkg.get_selected()
+        if selected < 0:
+            return
+        font_info = FONT_OPTIONS[selected]
+        if font_info["requires_fontspec"] and self._engine == "pdflatex":
+            self._show_toast(
+                f"⚠️ {font_info['display']} requires XeLaTeX or LuaLaTeX.",
+                timeout=4
+            )
+
+    # ------------------------------------------------------------------
+    # Panel: Layout & Spacing
+    # ------------------------------------------------------------------
+
+    def _build_layout_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        grp = Adw.PreferencesGroup(title="Page Layout")
+        box.append(grp)
+
+        paper_row = Adw.ActionRow(title="Paper size")
+        paper_box = Gtk.Box(spacing=4)
+        paper_box.set_valign(Gtk.Align.CENTER)
+        self._paper_btns: dict = {}
+        pg = None
+        for p, lbl in (("letterpaper", "Letter"), ("a4paper", "A4")):
+            btn = Gtk.ToggleButton(label=lbl)
+            btn.add_css_class("flat")
+            if pg is None:
+                pg = btn
+            else:
+                btn.set_group(pg)
+            btn._paper_key = p
+            btn.connect("toggled", self._on_paper_toggled)
+            paper_box.append(btn)
+            self._paper_btns[p] = btn
+        self._paper_btns["letterpaper"].set_active(True)
+        paper_row.add_suffix(paper_box)
+        grp.add(paper_row)
+
+        self._r_margin = _spin_row("Margin (inches)", 0.5, 3.0, 0.25, 1.0)
+        self._r_margin.connect("notify::value", lambda *_: self._dirty_preview())
+        grp.add(self._r_margin)
+
+        fs_row = Adw.ActionRow(title="Font size")
+        fs_box = Gtk.Box(spacing=4)
+        fs_box.set_valign(Gtk.Align.CENTER)
+        self._fs_btns: dict = {}
+        fg = None
+        for s in ("10pt", "11pt", "12pt"):
+            btn = Gtk.ToggleButton(label=s)
+            btn.add_css_class("flat")
+            if fg is None:
+                fg = btn
+            else:
+                btn.set_group(fg)
+            btn._fs_key = s
+            btn.connect("toggled", self._on_fs_toggled)
+            fs_box.append(btn)
+            self._fs_btns[s] = btn
+        self._fs_btns["11pt"].set_active(True)
+        fs_row.add_suffix(fs_box)
+        grp.add(fs_row)
+
+        self._r_linespace = _combo_row("Line spacing", ["Single", "1.5×", "Double"])
+        self._r_linespace.set_selected(1)
+        self._r_linespace.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_linespace)
+
+        self._multicol_grp = Adw.PreferencesGroup(title="Multi-column")
+        box.append(self._multicol_grp)
+        self._latex_only_widgets.append(self._multicol_grp)
+
+        self._r_use_multicol = _switch_row("Enable multicol")
+        self._r_use_multicol.connect("notify::active", self._on_multicol_toggled)
+        self._multicol_grp.add(self._r_use_multicol)
+
+        self._r_num_cols = _spin_row("Number of columns", 2, 4, 1, 2)
+        self._r_num_cols.connect("notify::value", lambda *_: self._dirty_preview())
+        self._r_num_cols.set_sensitive(False)
+        self._multicol_grp.add(self._r_num_cols)
+
+        self._r_col_rule = _switch_row("Column separator rule")
+        self._r_col_rule.connect("notify::active", lambda *_: self._dirty_preview())
+        self._r_col_rule.set_sensitive(False)
+        self._multicol_grp.add(self._r_col_rule)
+
+        self._r_col_sep = _spin_row("Column sep width (pt)", 4, 40, 1, 14)
+        self._r_col_sep.connect("notify::value", lambda *_: self._dirty_preview())
+        self._r_col_sep.set_sensitive(False)
+        self._multicol_grp.add(self._r_col_sep)
+
+        grp3 = Adw.PreferencesGroup(title="Paragraph Style")
+        box.append(grp3)
+
+        self._r_parindent = _spin_row("Paragraph indent (em)", 0, 4, 0.5, 1.5)
+        self._r_parindent.connect("notify::value", lambda *_: self._dirty_preview())
+        grp3.add(self._r_parindent)
+
+        self._r_parskip = _spin_row("Paragraph skip (pt)", 0, 18, 1, 0)
+        self._r_parskip.connect("notify::value", lambda *_: self._dirty_preview())
+        grp3.add(self._r_parskip)
+        self._latex_only_widgets.append(self._r_parskip)
+
+        self._r_microtype = _switch_row("Microtype (protrusion)")
+        self._r_microtype.set_active(True)
+        self._r_microtype.connect("notify::active", lambda *_: self._dirty_preview())
+        grp3.add(self._r_microtype)
+        self._latex_only_widgets.append(self._r_microtype)
+
+        self._content_stack.add_named(scroll, "layout")
+
+    # ------------------------------------------------------------------
+    # Panel: Extra Packages
+    # ------------------------------------------------------------------
+
+    def _build_features_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        self._latex_features_grp = Adw.PreferencesGroup(
+            title="LaTeX Packages",
+            description=r"Adds \usepackage{} calls to the generated preamble"
+        )
+        box.append(self._latex_features_grp)
+
+        for key, label, desc in LATEX_FEATURES:
+            row = _switch_row(label, desc)
+            row.connect("notify::active", lambda *_: self._dirty_preview())
+            self._latex_features_grp.add(row)
+            self._latex_feature_switches[key] = row
+
+        self._typst_features_grp = Adw.PreferencesGroup(
+            title="Typst Packages",
+            description="Adds #import lines at the top of the generated document"
+        )
+        box.append(self._typst_features_grp)
+
+        for key, label, desc in TYPST_FEATURES:
+            row = _switch_row(label, desc)
+            row.connect("notify::active", lambda *_: self._dirty_preview())
+            self._typst_features_grp.add(row)
+            self._typst_feature_switches[key] = row
+
+        self._content_stack.add_named(scroll, "features")
+
+    # ------------------------------------------------------------------
+    # Panel: Languages
+    # ------------------------------------------------------------------
+
+    def _build_languages_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        grp = Adw.PreferencesGroup(
+            title="Language Support",
+            description=(
+                "LaTeX: adds polyglossia/babel/xeCJK/luatexja packages. "
+                "Typst: adds font guidance comments and #set text(lang: …)."
+            )
+        )
+        box.append(grp)
+
+        for key, label, desc in LANGUAGES:
+            row = _switch_row(label, desc)
+            row.connect("notify::active", lambda *_: self._dirty_preview())
+            grp.add(row)
+            self._lang_switches[key] = row
+
+        self._content_stack.add_named(scroll, "languages")
+
+    # ------------------------------------------------------------------
+    # Panel: Headers & Footers
+    # ------------------------------------------------------------------
+
+    def _build_headers_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        grp = Adw.PreferencesGroup(
+            title="Running Header",
+            description=(
+                "LaTeX: fancyhdr.  "
+                "Typst: #set page(header: …)."
+            )
+        )
+        box.append(grp)
+
+        self._r_header_style = _combo_row("Header style", HEADER_STYLE_LABELS)
+        self._r_header_style.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_header_style)
+
+        self._r_header_rule = _switch_row(
+            "Header rule",
+            "Horizontal rule below the running header (LaTeX only)"
+        )
+        self._r_header_rule.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_header_rule)
+
+        self._r_suppress_first = _switch_row(
+            "Suppress on first page",
+            "No header on the title page"
+        )
+        self._r_suppress_first.set_active(True)
+        self._r_suppress_first.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_suppress_first)
+
+        self._content_stack.add_named(scroll, "headers")
+
+    # ------------------------------------------------------------------
+    # Panel: Bibliography
+    # ------------------------------------------------------------------
+
+    def _build_bib_panel(self):
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.set_margin_top(18); box.set_margin_bottom(18)
+        box.set_margin_start(18); box.set_margin_end(18)
+        scroll.set_child(box)
+
+        grp = Adw.PreferencesGroup(title="BibLaTeX / Zotero Bibliography")
+        box.append(grp)
+
+        self._r_bib_file = _entry_row("Path to .bib file")
+        self._r_bib_file.set_show_apply_button(True)
+        saved_bib = self._config.get("bib_file", "")
+        if saved_bib:
+            self._r_bib_file.set_text(saved_bib)
+        self._r_bib_file.connect("apply",   self._on_bib_file_apply)
+        self._r_bib_file.connect("changed", lambda *_: self._dirty_preview())
+        grp.add(self._r_bib_file)
+
+        self._r_print_bib = _switch_row("Print bibliography at end")
+        self._r_print_bib.set_active(True)
+        self._r_print_bib.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_print_bib)
+
+        self._r_bib_heading = _entry_row("Bibliography heading")
+        self._r_bib_heading.set_text("Bibliography")
+        self._r_bib_heading.connect("changed", lambda *_: self._dirty_preview())
+        grp.add(self._r_bib_heading)
+
+        self._r_bib_sort = _combo_row(
+            "Sorting",
+            ["Author–Year–Title (nyt)", "Author–Title–Year (nty)",
+             "None (citation order)", "Year–Name–Title (ynt)"]
+        )
+        self._r_bib_sort.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_bib_sort)
+
+        self._r_cite_cmd = _combo_row(
+            "Default cite command",
+            [r"\autocite", r"\footcite", r"\parencite", r"\cite"]
+        )
+        self._r_cite_cmd.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_cite_cmd)
+
+        banner = Adw.Banner(title=(
+            "Export from Zotero via BetterBibTeX → Keep Updated, "
+            "then paste the absolute path above."
+        ))
+        banner.set_button_label("Got it")
+        banner.connect("button-clicked", lambda b: b.set_revealed(False))
+        banner.set_revealed(True)
+        box.append(banner)
+
+        self._content_stack.add_named(scroll, "bib")
+
+    def _on_bib_file_apply(self, row):
+        path = row.get_text().strip()
+        self._config.set("bib_file", path)
+        self._dirty_preview()
+
+    # ------------------------------------------------------------------
+    # Panel: Preview  (source ↔ compiled)
+    # ------------------------------------------------------------------
+
+    def _build_preview_panel(self):
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        outer.set_vexpand(True)
+
+        # Toolbar
+        toolbar = Gtk.Box(spacing=6)
+        toolbar.set_margin_top(8); toolbar.set_margin_bottom(8)
+        toolbar.set_margin_start(12); toolbar.set_margin_end(12)
+
+        # Source / Compiled toggle
+        mode_box = Gtk.Box(spacing=0)
+        mode_box.add_css_class("linked")
+        self._prev_mode_btns: dict = {}
+        prev_grp = None
+        for mode_key, mode_lbl in (("source", "Source"), ("compiled", "Compiled")):
+            btn = Gtk.ToggleButton(label=mode_lbl)
+            if prev_grp is None:
+                prev_grp = btn
+            else:
+                btn.set_group(prev_grp)
+            btn._preview_mode = mode_key
+            btn.connect("toggled", self._on_preview_mode_toggled)
+            mode_box.append(btn)
+            self._prev_mode_btns[mode_key] = btn
+        self._prev_mode_btns["source"].set_active(True)
+        toolbar.append(mode_box)
+
+        refresh_btn = Gtk.Button(label="Refresh")
+        refresh_btn.add_css_class("flat")
+        refresh_btn.connect("clicked", lambda *_: self._refresh_source())
+        toolbar.append(refresh_btn)
+
+        self._compile_spinner = Gtk.Spinner()
+        toolbar.append(self._compile_spinner)
+
+        open_btn = Gtk.Button(label="Open PDF")
+        open_btn.add_css_class("flat")
+        open_btn.connect("clicked", self._open_in_viewer)
+        toolbar.append(open_btn)
+
+        self._compile_status = Gtk.Label(label="")
+        self._compile_status.set_hexpand(True)
+        self._compile_status.set_xalign(0.0)
+        self._compile_status.add_css_class("dim-label")
+        toolbar.append(self._compile_status)
+
+        outer.append(toolbar)
+        outer.append(Gtk.Separator())
+
+        # Stack: source | compiled
+        self._preview_inner_stack = Gtk.Stack()
+        self._preview_inner_stack.set_vexpand(True)
+        self._preview_inner_stack.set_transition_type(Gtk.StackTransitionType.NONE)
+
+        # Source view
+        src_scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        self._preview_buf = Gtk.TextBuffer()
+        self._preview_view = Gtk.TextView(buffer=self._preview_buf)
+        self._preview_view.set_editable(False)
+        self._preview_view.set_monospace(True)
+        self._preview_view.set_left_margin(14)
+        self._preview_view.set_top_margin(10)
+        src_scroll.set_child(self._preview_view)
+        self._preview_inner_stack.add_named(src_scroll, "source")
+
+        # Compiled view
+        cmp_outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        cmp_outer.set_vexpand(True)
+        cmp_scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        self._pages_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self._pages_box.set_margin_top(12); self._pages_box.set_margin_bottom(12)
+        self._pages_box.set_margin_start(12); self._pages_box.set_margin_end(12)
+        cmp_scroll.set_child(self._pages_box)
+        cmp_outer.append(cmp_scroll)
+        self._preview_inner_stack.add_named(cmp_outer, "compiled")
+
+        outer.append(self._preview_inner_stack)
+
+        self._content_stack.add_named(outer, "preview")
+
+    # ------------------------------------------------------------------
+    # Navigation
+    # ------------------------------------------------------------------
+
+    def _on_nav_selected(self, listbox, row):
+        if row is None:
+            return
+        key = row._nav_key
+        self._content_stack.set_visible_child_name(key)
+        if key == "preview":
+            cur_mode = "compiled" if self._prev_mode_btns.get("compiled", Gtk.ToggleButton()).get_active() else "source"
+            if cur_mode == "source":
+                self._refresh_source()
+
+    def _nav_select(self, key: str):
+        self._nav_list.select_row(self._nav_rows[key])
+
+    def _on_preview_btn(self, _btn):
+        """Header bar Preview button → navigate to preview, start compilation."""
+        self._nav_select("preview")
+        self._content_stack.set_visible_child_name("preview")
+        self._prev_mode_btns["compiled"].set_active(True)
+        self._compile_preview()
+
+    def _on_preview_mode_toggled(self, btn):
+        if not btn.get_active():
+            return
+        mode = btn._preview_mode
+        self._preview_inner_stack.set_visible_child_name(mode)
+        if mode == "source":
+            self._refresh_source()
+        else:
+            self._compile_preview()
+
+    # ------------------------------------------------------------------
+    # Source preview
+    # ------------------------------------------------------------------
+
+    def _refresh_source(self):
+        content = self._build_template()
+        self._preview_buf.set_text(content)
+        self._preview_dirty = False
+
+    def _dirty_preview(self):
+        self._preview_dirty = True
+        current_panel = self._content_stack.get_visible_child_name()
+        if current_panel != "preview":
+            return
+        mode = "compiled" if self._prev_mode_btns.get("compiled", Gtk.ToggleButton()).get_active() else "source"
+        if mode == "source":
+            self._refresh_source()
+
+    # ------------------------------------------------------------------
+    # Compiled preview
+    # ------------------------------------------------------------------
+
+    def _compile_preview(self):
+        if self._compiling:
+            return
+        self._compiling = True
+        self._compile_spinner.start()
+        self._compile_status.set_text("Compiling…")
+        source = self._build_template()
+        fmt = self._format
+        engine = self._engine
+        t = threading.Thread(
+            target=self._compile_thread,
+            args=(source, fmt, engine),
+            daemon=True,
+        )
+        t.start()
+
+    def _compile_thread(self, source: str, fmt: str, engine: str):
+        from essay_builder.preview_compiler import compile_typst, compile_latex
+        if fmt == "typst":
+            pages, err = compile_typst(source)
+        else:
+            pages, err = compile_latex(source, engine)
+        GLib.idle_add(self._compile_done, pages, err)
+
+    def _compile_done(self, pages: list, err: str):
+        self._compiling = False
+        self._compile_spinner.stop()
+
+        # Clear previous pages
+        child = self._pages_box.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            self._pages_box.remove(child)
+            child = nxt
+
+        if err:
+            self._compile_status.set_text(f"Error — see below")
+            lbl = Gtk.Label(label=err, wrap=True, xalign=0.0)
+            lbl.set_selectable(True)
+            lbl.add_css_class("monospace")
+            self._pages_box.append(lbl)
+        else:
+            self._compile_status.set_text(f"{len(pages)} page(s)")
+            for png_bytes in pages:
+                try:
+                    texture = _png_bytes_to_texture(png_bytes)
+                    pic = Gtk.Picture.new_for_paintable(texture)
+                    pic.set_content_fit(Gtk.ContentFit.CONTAIN)
+                    pic.set_hexpand(True)
+                    # Wrap in a white card so pages look correct on dark themes
+                    card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+                    card.add_css_class("preview-page-card")
+                    card.append(pic)
+                    self._pages_box.append(card)
+                except Exception as e:
+                    self._pages_box.append(Gtk.Label(label=f"Image error: {e}"))
+
+        return GLib.SOURCE_REMOVE
+
+    # ------------------------------------------------------------------
+    # Open in system viewer
+    # ------------------------------------------------------------------
+
+    def _open_in_viewer(self, _btn):
+        if self._compiling:
+            return
+        self._compiling = True
+        self._compile_spinner.start()
+        self._compile_status.set_text("Compiling PDF…")
+        source = self._build_template()
+        t = threading.Thread(
+            target=self._open_pdf_thread,
+            args=(source, self._format, self._engine),
+            daemon=True,
+        )
+        t.start()
+
+    def _open_pdf_thread(self, source: str, fmt: str, engine: str):
+        from essay_builder.preview_compiler import compile_typst_to_pdf, compile_latex_to_pdf
+        if fmt == "typst":
+            path, err = compile_typst_to_pdf(source)
+        else:
+            path, err = compile_latex_to_pdf(source, engine)
+        GLib.idle_add(self._open_pdf_done, path, err)
+
+    def _open_pdf_done(self, path: str, err: str):
+        self._compiling = False
+        self._compile_spinner.stop()
+        if err:
+            self._compile_status.set_text("PDF compile error")
+            self._show_toast(err.split("\n")[0][:80], timeout=5)
+        else:
+            self._compile_status.set_text("Opened in PDF viewer")
+            try:
+                import subprocess as _sp
+                _sp.Popen(["xdg-open", path])
+            except Exception as e:
+                self._show_toast(f"Could not open viewer: {e}", timeout=4)
+        return GLib.SOURCE_REMOVE
+
+    # ------------------------------------------------------------------
+    # State extraction
+    # ------------------------------------------------------------------
+
+    def _notes_index_to_str(self, idx):
+        return ["footnote", "endnote", "none"][idx]
+
+    def _linespace_index_to_str(self, idx):
+        return ["1", "1.5", "2"][idx]
+
+    def _bib_sort_index_to_str(self, idx):
+        return ["nyt", "nty", "none", "ynt"][idx]
+
+    def _cite_cmd_index_to_str(self, idx):
+        return ["autocite", "footcite", "parencite", "cite"][idx]
+
+    def _font_pkg_key(self, idx):
+        if idx < 0:
+            return "none"
+        return FONT_OPTIONS[idx]["key"]
+
+    def _collect_state(self) -> dict:
+        font_idx = self._r_font_pkg.get_selected()
+        hs_idx = self._r_header_style.get_selected()
+        return {
+            "title":        self._r_title.get_text(),
+            "subtitle":     self._r_subtitle.get_text(),
+            "authors":      self._r_authors.get_text(),
+            "affiliation":  self._r_affil.get_text(),
+            "date":         self._date_entry.get_text(),
+            "course":       self._r_course.get_text(),
+            "has_abstract": self._r_abstract.get_active(),
+            "has_keywords": self._r_keywords.get_active(),
+            "use_toc":      self._r_toc.get_active(),
+
+            "cit_style":          self._cit_style,
+            "biblatex_style":     self._r_bib_style.get_text(),
+            "notes_mode":         self._notes_index_to_str(self._r_notes.get_selected()),
+            "typst_notes":        "footnote" if self._r_typst_notes.get_selected() == 0 else "endnote",
+            "numbered_heads":     self._r_numbered.get_active(),
+            "use_style_headings": self._r_style_headings.get_active(),
+            "use_parts":          self._r_use_parts.get_active(),
+            "font_pkg":           self._font_pkg_key(font_idx),
+            "engine":             self._engine,
+            "encoding":           ["utf8", "latin1"][self._r_encoding.get_selected()],
+
+            "paper":        self._paper,
+            "font_size":    self._font_size,
+            "margin":       str(self._r_margin.get_value()),
+            "linespace":    self._linespace_index_to_str(self._r_linespace.get_selected()),
+            "parindent":    str(self._r_parindent.get_value()),
+            "parskip":      str(int(self._r_parskip.get_value())),
+            "microtype":    self._r_microtype.get_active(),
+            "use_multicol": self._r_use_multicol.get_active(),
+            "num_cols":     int(self._r_num_cols.get_value()),
+            "col_rule":     self._r_col_rule.get_active(),
+            "col_sep":      str(int(self._r_col_sep.get_value())),
+
+            "header_style":         HEADER_STYLE_KEYS[hs_idx] if hs_idx < len(HEADER_STYLE_KEYS) else "auto",
+            "header_rule":          self._r_header_rule.get_active(),
+            "suppress_first_header": self._r_suppress_first.get_active(),
+
+            "bib_file":    self._r_bib_file.get_text(),
+            "bib_sort":    self._bib_sort_index_to_str(self._r_bib_sort.get_selected()),
+            "bib_heading": self._r_bib_heading.get_text(),
+            "cite_cmd":    self._cite_cmd_index_to_str(self._r_cite_cmd.get_selected()),
+            "print_bib":   self._r_print_bib.get_active(),
+
+            "latex_features": [k for k, r in self._latex_feature_switches.items() if r.get_active()],
+            "typst_features": [k for k, r in self._typst_feature_switches.items() if r.get_active()],
+            "languages":      [k for k, sw in self._lang_switches.items() if sw.get_active()],
+            "format": self._format,
+        }
+
+    # ------------------------------------------------------------------
+    # Template generation
+    # ------------------------------------------------------------------
+
+    def _build_template(self) -> str:
+        state = self._collect_state()
+        if self._format == "typst":
+            return typst_generate(state)
+        return generate(state)
+
+    # ------------------------------------------------------------------
+    # Toggle callbacks
+    # ------------------------------------------------------------------
+
+    def _on_style_toggled(self, btn):
+        if btn.get_active():
+            self._cit_style = btn._style_key
+            defaults = STYLE_DEFAULTS[self._cit_style]
+            self._r_bib_style.set_text(defaults["biblatex_style"])
+            note_idx = {"footnote": 0, "endnote": 1, "none": 2}[defaults["notes"]]
+            self._r_notes.set_selected(note_idx)
+            self._dirty_preview()
+
+    def _on_engine_toggled(self, btn):
+        if btn.get_active():
+            self._engine = btn._eng_key.lower()
+            self._check_font_engine_compatibility()
+            self._dirty_preview()
+
+    def _on_paper_toggled(self, btn):
+        if btn.get_active():
+            self._paper = btn._paper_key
+            self._dirty_preview()
+
+    def _on_fs_toggled(self, btn):
+        if btn.get_active():
+            self._font_size = btn._fs_key
+            self._dirty_preview()
+
+    def _on_multicol_toggled(self, row, _):
+        on = row.get_active()
+        self._r_num_cols.set_sensitive(on)
+        self._r_col_rule.set_sensitive(on)
+        self._r_col_sep.set_sensitive(on)
+        self._dirty_preview()
+
+    def _on_format_toggled(self, btn):
+        if not btn.get_active():
+            return
+        self._format = btn._fmt_key
+        is_latex = self._format == "latex"
+        self._copy_btn.set_label("Copy TeX" if is_latex else "Copy Typst")
+        for w in self._latex_only_widgets:
+            w.set_visible(is_latex)
+        # Notes rows: LaTeX notes hidden for typst, typst notes hidden for latex
+        if hasattr(self, "_r_notes"):
+            self._r_notes.set_visible(is_latex)
+        if hasattr(self, "_r_typst_notes"):
+            self._r_typst_notes.set_visible(not is_latex)
+        if hasattr(self, "_latex_features_grp"):
+            self._latex_features_grp.set_visible(is_latex)
+        if hasattr(self, "_typst_features_grp"):
+            self._typst_features_grp.set_visible(not is_latex)
+        self._dirty_preview()
+
+    # ------------------------------------------------------------------
+    # Date helper
+    # ------------------------------------------------------------------
+
+    def _set_today(self, _btn):
+        self._date_entry.set_text(datetime.date.today().isoformat())
+
+    # ------------------------------------------------------------------
+    # Journal template import
+    # ------------------------------------------------------------------
+
+    def _on_import_journal(self, _btn):
+        dialog = Gtk.FileDialog(title="Import journal LaTeX template")
+        filt = Gtk.FileFilter()
+        filt.add_pattern("*.tex")
+        filt.add_pattern("*.cls")
+        filt.add_pattern("*.sty")
+        filt.set_name("LaTeX files (*.tex, *.cls, *.sty)")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filt)
+        dialog.set_filters(filters)
+        dialog.open(self, None, self._on_import_done)
+
+    def _on_import_done(self, dialog, result):
+        try:
+            gfile = dialog.open_finish(result)
+        except GLib.Error:
+            return
+        path = gfile.get_path()
+        if not path:
+            return
+        from essay_builder.journal_importer import parse_template, describe_result
+        state = parse_template(path)
+        if "_error" in state:
+            self._show_toast(f"Import failed: {state['_error']}", timeout=4)
+            return
+        # Merge into current state
+        current = self._collect_state()
+        current.update({k: v for k, v in state.items() if not k.startswith("_")})
+        self._apply_state(current)
+        summary = describe_result(state)
+        self._show_toast(summary, timeout=4)
+
+    # ------------------------------------------------------------------
+    # About dialog
+    # ------------------------------------------------------------------
+
+    def _show_about(self, _btn):
+        about = Adw.AboutWindow()
+        about.set_transient_for(self)
+        about.set_application_name("Gost")
+        about.set_version("1.1.0")
+        about.set_comments(
+            "Academic Essay Templater.\n"
+            "Generate LaTeX and Typst templates for SBL, Chicago, MLA, and APA."
+        )
+        about.set_developers(["Cal St Francis"])
+        about.set_copyright("© 2025 Cal St Francis")
+        about.set_license_type(Gtk.License.GPL_3_0)
+        about.set_website("https://github.com/calstfrancis/gost")
+        about.set_issue_url("https://github.com/calstfrancis/gost/issues")
+        about.set_release_notes(
+            "<p>Version 1.1.0</p>"
+            "<ul>"
+            "<li>Compiled PDF preview (Typst and LaTeX)</li>"
+            "<li>Journal LaTeX template importer</li>"
+            "<li>Running headers and footers panel</li>"
+            "<li>Typst endnotes support</li>"
+            "<li>Template profiles (save/load/delete)</li>"
+            "<li>Language support: Russian, Hebrew, Japanese, Tibetan, Sanskrit, Greek, Chinese</li>"
+            "<li>Defaults to Typst format</li>"
+            "</ul>"
+        )
+        about.present()
+
+    # ------------------------------------------------------------------
+    # Export / copy
+    # ------------------------------------------------------------------
+
+    def _on_copy(self, _btn):
+        content = self._build_template()
+        clipboard = Gdk.Display.get_default().get_clipboard()
+        clipboard.set(content)
+        fmt_label = "Typst" if self._format == "typst" else "TeX"
+        self._show_toast(f"{fmt_label} copied to clipboard")
+
+    def _on_export(self, _btn):
+        dialog = Gtk.FileDialog(title="Export template file")
+
+        tex_filt = Gtk.FileFilter()
+        tex_filt.add_pattern("*.tex")
+        tex_filt.set_name("LaTeX files (*.tex)")
+
+        typ_filt = Gtk.FileFilter()
+        typ_filt.add_pattern("*.typ")
+        typ_filt.set_name("Typst files (*.typ)")
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        if self._format == "typst":
+            filters.append(typ_filt)
+            filters.append(tex_filt)
+        else:
+            filters.append(tex_filt)
+            filters.append(typ_filt)
+        dialog.set_filters(filters)
+
+        ext = ".typ" if self._format == "typst" else ".tex"
+        raw_title = self._r_title.get_text() or "essay"
+        slug = "".join(c if c.isalnum() else "-" for c in raw_title.lower()).strip("-")
+        dialog.set_initial_name(f"{slug}{ext}")
+        dialog.save(self, None, self._on_export_done)
+
+    def _on_export_done(self, dialog, result):
+        try:
+            gfile = dialog.save_finish(result)
+        except GLib.Error:
+            return
+        basename = gfile.get_basename()
+        use_typst = basename.endswith(".typ")
+        state = self._collect_state()
+        content = typst_generate(state) if use_typst else generate(state)
+        try:
+            gfile.replace_contents(
+                content.encode("utf-8"), None, False,
+                Gio.FileCreateFlags.REPLACE_DESTINATION, None
+            )
+            if use_typst:
+                self._show_toast(f"Exported {basename}")
+            else:
+                self._write_latexmkrc(gfile)
+                self._show_toast(f"Exported {basename} + .latexmkrc")
+        except GLib.Error as e:
+            self._show_toast(f"Export failed: {e.message}")
+
+    def _write_latexmkrc(self, tex_gfile):
+        engine_map = {
+            "pdflatex": ("pdflatex", "$pdflatex"),
+            "xelatex":  ("xelatex",  "$xelatex"),
+            "lualatex": ("lualatex", "$lualatex"),
+        }
+        cmd, var = engine_map.get(self._engine, ("pdflatex", "$pdflatex"))
+        lines = [
+            "# .latexmkrc — generated by Gost",
+            f"# Engine: {self._engine}",
+            "",
+            f"{var} = '{cmd} -interaction=nonstopmode -synctex=1 %O %S';",
+            "$biber = 'biber %O %S';",
+            "$pdf_mode = 1;",
+            "@generated_exts = (@generated_exts, 'bbl', 'bcf', 'run.xml');",
+        ]
+        parent = tex_gfile.get_parent()
+        if parent is None:
+            return
+        rc_file = parent.get_child(".latexmkrc")
+        try:
+            rc_file.replace_contents(
+                "\n".join(lines).encode("utf-8"), None, False,
+                Gio.FileCreateFlags.REPLACE_DESTINATION, None
+            )
+        except GLib.Error:
+            pass
+
+    # ------------------------------------------------------------------
+    # Toast
+    # ------------------------------------------------------------------
+
+    def _show_toast(self, msg: str, timeout: int = 2):
+        if self._toast_overlay:
+            self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=timeout))
+        else:
+            print(f"TOAST: {msg}")
