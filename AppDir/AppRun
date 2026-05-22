@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# AppRun — Gost AppImage launcher
+set -euo pipefail
+
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# ── Runtime dependency check ──────────────────────────────────────────────────
+_check_deps() {
+    python3 -c "
+import sys, gi
+if sys.version_info < (3, 10):
+    print('ERROR: Python 3.10+ required (found ' + '.'.join(map(str,sys.version_info[:2])) + ')')
+    sys.exit(1)
+try:
+    gi.require_version('Gtk','4.0')
+    gi.require_version('Adw','1')
+    from gi.repository import Gtk, Adw
+except Exception as e:
+    print('ERROR: GTK4/libadwaita not found:', e)
+    print()
+    print('Install the required packages for your distro:')
+    print('  openSUSE:     zypper in python3-gobject typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1')
+    print('  Debian/Ubuntu: apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1')
+    print('  Fedora:        dnf install python3-gobject gtk4 libadwaita')
+    print('  Arch:          pacman -S python-gobject gtk4 libadwaita')
+    sys.exit(1)
+" || exit 1
+}
+
+# ── Environment ───────────────────────────────────────────────────────────────
+# Add bundled Python source to PYTHONPATH; system PyGObject stays in system path
+export PYTHONPATH="${HERE}/usr/lib/python${PYTHONPATH:+:$PYTHONPATH}"
+
+# Make bundled fonts visible to fontconfig
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# ── Launch ────────────────────────────────────────────────────────────────────
+_check_deps
+exec python3 -m essay_builder.app "$@"

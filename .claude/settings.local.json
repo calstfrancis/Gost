@@ -4,7 +4,14 @@
       "Bash(python3 -m pytest tests/ -v)",
       "Bash(python3 -m unittest discover tests/ -v)",
       "Bash(python3 -m py_compile essay_builder/texgen.py essay_builder/typstgen.py essay_builder/style_packs.py essay_builder/csl_styles.py essay_builder/languagetool.py)",
-      "Bash(python3 -m py_compile essay_builder/window.py)"
+      "Bash(python3 -m py_compile essay_builder/window.py)",
+      "Bash(python3 -c \"import sys; print\\(sys.version_info\\)\")",
+      "Bash(python3 -c \"import gi; print\\(gi.__version__\\)\")",
+      "Bash(ldd --version)",
+      "Bash(python3 -c \"import gi; gi.require_version\\('Gtk','4.0'\\); gi.require_version\\('Adw','1'\\); from gi.repository import Gtk,Adw; print\\('GTK',Gtk.MAJOR_VERSION,Gtk.MINOR_VERSION\\); print\\('Adw',Adw.VERSION_S\\)\")",
+      "Bash(python3 -c \"import gi; gi.require_version\\('Adw','1'\\); from gi.repository import Adw; print\\('adwaita ok'\\)\")",
+      "Bash(chmod +x *)",
+      "Bash(bash *)"
     ]
   }
 }
