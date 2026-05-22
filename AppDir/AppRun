@@ -3,7 +3,18 @@ SELF="$(readlink -f "$0")"
 HERE="$(dirname "$SELF")"
 
 # Prepend the bundled Python modules
-export PYTHONPATH="${HERE}/usr/lib/essay-builder${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="${HERE}/usr/lib/gost${PYTHONPATH:+:$PYTHONPATH}"
+
+# ---- Bundled fonts via fontconfig ----
+# If the AppImage ships fonts, point fontconfig at them before Pango starts.
+BUNDLED_FONTCONF="${HERE}/etc/fonts/fonts.conf"
+if [[ -f "$BUNDLED_FONTCONF" ]]; then
+    # Resolve the __APPDIR_FONTS__ placeholder to the real path
+    RUNTIME_FONTCONF="${XDG_RUNTIME_DIR:-/tmp}/gost-fonts-$$.conf"
+    sed "s|__APPDIR_FONTS__|${HERE}/fonts|g" "$BUNDLED_FONTCONF" > "$RUNTIME_FONTCONF"
+    export FONTCONFIG_FILE="$RUNTIME_FONTCONF"
+    trap "rm -f '$RUNTIME_FONTCONF'" EXIT
+fi
 
 # Verify GTK4 and libadwaita are available on this system
 if ! python3 -c "

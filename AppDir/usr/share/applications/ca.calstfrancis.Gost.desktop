@@ -9,4 +9,4 @@ Type=Application
 Categories=Education;Office;
 Keywords=latex;tex;typst;essay;academic;bibliography;
 StartupNotify=true
-StartupWMClass=ca.astheology.Gost
+StartupWMClass=ca.calstfrancis.Gost

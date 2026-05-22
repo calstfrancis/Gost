@@ -1525,6 +1525,13 @@ class GostWindow(Adw.ApplicationWindow):
     # Toast
     # ------------------------------------------------------------------
 
+    def notify_fonts_installed(self):
+        self._show_toast(
+            "GOST Type B font installed — restart Gost to activate it",
+            timeout=6,
+        )
+        return False  # GLib.SOURCE_REMOVE
+
     def _show_toast(self, msg: str, timeout: int = 2):
         if self._toast_overlay:
             self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=timeout))
