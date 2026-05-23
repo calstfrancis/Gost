@@ -10,15 +10,19 @@
 6. **Headers & Footers** — Choose a running header preset or leave on Auto to follow citation-style conventions.
 7. **Bibliography** — Paste the absolute path to your `.bib` file and press Enter. This path is saved automatically.
 8. **Preview** — Click in the sidebar to see the generated source code. Click **Preview** in the top bar to compile and see the actual rendered pages.
-9. **Export** — Save as `.typ` (Typst) or `.tex` (LaTeX + `.latexmkrc`).
+9. **Export** — Save as `.typ` (Typst), `.tex` (LaTeX + `.latexmkrc`), or `.docx` / `.odt` (Word).
 
 ---
 
-## Format: LaTeX vs Typst
+## Format: Typst, LaTeX, or Word
 
-Toggle between LaTeX and Typst using the buttons in the top-right. The active format is used for all previews and exports. Switching format hides settings that don't apply (e.g., LaTeX engines are hidden in Typst mode).
+Toggle between Typst, LaTeX, and Word using the buttons in the header bar. The active format is used for all previews and exports. Switching format hides settings that don't apply (e.g., LaTeX engines are hidden in Typst and Word modes).
 
-To export both formats from one set of settings, export as `.tex`, then export again as `.typ` — the generator reads the same state dict for both.
+- **Typst** — outputs a `.typ` file. Requires `typst` for compiled preview.
+- **LaTeX** — outputs a `.tex` file plus a `.latexmkrc`. Requires `latexmk` for compiled preview.
+- **Word** — outputs a `.docx` (or `.odt` via LibreOffice conversion). Compiled preview is not available; use Export directly. Requires `python-docx` (`pip install gost-academic[word]`).
+
+To export multiple formats from one set of settings, switch formats between exports — the generator reads the same settings for all three.
 
 ---
 
@@ -30,6 +34,9 @@ To export both formats from one set of settings, export as `.tex`, then export a
 | **Chicago** | Centred bold | Centre bottom | Footnotes; `chicago-notes` biblatex |
 | **MLA** | Left bold | Top right: `LastName Page` | No notes; `mla` biblatex |
 | **APA** | Centred bold (5-level hierarchy) | Top right: page; Left: short title | No notes; `apa` biblatex |
+| **ASA** | Centred bold | Top right: page | No notes; `asa` biblatex |
+| **Turabian** | Centred bold | Centre bottom | Footnotes; `chicago-notes` biblatex |
+| **Harvard** | Left bold | Top right: page | No notes; `authoryear` biblatex |
 
 "Style-appropriate headings" must be enabled (it is by default) for the heading rules to be applied.
 
@@ -232,6 +239,31 @@ PyGObject is not installed for your Python.
 - Debian/Ubuntu (≥ 22.10): `apt install gir1.2-gtk-4.0`
 - Fedora: `dnf install gtk4`
 - Arch: `pacman -S gtk4`
+
+---
+
+### Word export: "python-docx not installed"
+
+Word and ODT export requires the `python-docx` package:
+
+```bash
+pip install gost-academic[word]
+```
+
+If Gost was installed from the AppImage, python-docx is already bundled — this message should not appear. If it does, rebuild the AppImage with `bash build-appimage.sh`.
+
+---
+
+### ODT export: "LibreOffice not found"
+
+ODT conversion requires LibreOffice:
+
+- openSUSE: `zypper in libreoffice`
+- Debian/Ubuntu: `apt install libreoffice`
+- Fedora: `dnf install libreoffice`
+- Arch: `pacman -S libreoffice-still`
+
+Alternatively, export as `.docx` and open it in LibreOffice manually.
 
 ---
 

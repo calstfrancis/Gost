@@ -17,7 +17,7 @@ step()  { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="$(python3 -c "from essay_builder import __version__; print(__version__)" 2>/dev/null || echo "0.1.4")"
+VERSION="$(python3 -c "from essay_builder import __version__; print(__version__)" 2>/dev/null || echo "0.1.5")"
 ARCH="$(uname -m)"
 APP_ID="ca.calstfrancis.Gost"
 APPDIR="${SCRIPT_DIR}/AppDir"
@@ -90,6 +90,17 @@ cp -r "${SCRIPT_DIR}/essay_builder" "${APPDIR}/usr/lib/python/"
 # Remove __pycache__ to keep the AppImage clean
 find "${APPDIR}/usr/lib/python" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 info "Copied essay_builder package"
+
+# ── Bundle python-docx (Word export) ─────────────────────────────────────────
+step "Bundling python-docx"
+if pip3 install --quiet --break-system-packages --target "${APPDIR}/usr/lib/python" python-docx 2>/dev/null; then
+    # Remove tests and dist-info to slim the bundle
+    find "${APPDIR}/usr/lib/python" \( -name "*.dist-info" -o -name "*.egg-info" \) \
+        -exec rm -rf {} + 2>/dev/null || true
+    info "python-docx bundled"
+else
+    warn "pip3 install python-docx failed — Word export will require python-docx on the host"
+fi
 
 # ── Bundled fonts ─────────────────────────────────────────────────────────────
 FONT_SRC="${SCRIPT_DIR}/essay_builder/fonts"

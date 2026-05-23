@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.5] – 2026-05-23
+
+### Added
+- **Word / ODT export** — new Word format button in the header bar generates a fully styled `.docx` template with correct margins, font, line spacing, heading styles, and a bibliography section for all seven citation styles. ODT export is available via LibreOffice headless conversion. Requires `python-docx` (bundled in the AppImage; `pip install gost-academic[word]` for source installs).
+- **PyPI package** (`gost-academic`) — Gost is now published on PyPI. Install with `pip install gost-academic` or `pip install gost-academic[word]` for Word export support.
+- **GitHub Actions publish workflow** — releases tagged on GitHub automatically publish to PyPI via OIDC trusted publishing (no API token required).
+
+### Changed
+- `setup.py` replaced by `pyproject.toml` (modern packaging standard).
+- `_ensure_desktop_integration()` now updates installed icon and desktop entry when the source file is newer, preventing a stale launcher icon after source-tree updates.
+
+---
+
 ## [0.1.4] – 2026-05-23
 
 ### Added

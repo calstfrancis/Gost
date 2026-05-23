@@ -34,10 +34,20 @@
 
 ## Installation
 
+### pip (recommended)
+```bash
+pip install gost-academic          # core app (LaTeX + Typst output)
+pip install gost-academic[word]    # + Word/ODT export via python-docx
+gost                      # launch
+```
+
+> **Note:** GTK4 and PyGObject must be installed as system packages first — pip cannot install them.
+> See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
+
 ### AppImage
 ```bash
-chmod +x gost-0.1.4-x86_64.AppImage
-./gost-0.1.4-x86_64.AppImage
+chmod +x gost-0.1.5-x86_64.AppImage
+./gost-0.1.5-x86_64.AppImage
 # Or install via Gear Lever for desktop integration
 ```
 
@@ -51,7 +61,7 @@ python3 -m essay_builder.app
 ### Build your own AppImage
 ```bash
 bash build-appimage.sh
-# Produces gost-0.1.4-x86_64.AppImage in the current directory
+# Produces gost-0.1.5-x86_64.AppImage in the current directory
 ```
 
 ## Usage

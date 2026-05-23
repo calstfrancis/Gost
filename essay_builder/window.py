@@ -15,6 +15,7 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Gio
 
 from essay_builder.texgen import generate, STYLE_DEFAULTS, FONT_OPTIONS
 from essay_builder.typstgen import generate as typst_generate
+from essay_builder.wordgen import generate as word_generate, available as word_available, docx_to_odt
 from essay_builder.config import Config
 from essay_builder.logger import get_logger
 
@@ -239,18 +240,20 @@ class GostWindow(Adw.ApplicationWindow):
         self._copy_btn.connect("clicked", self._on_copy)
         hbar.pack_start(self._copy_btn)
 
-        # Format toggle (Typst / LaTeX)
+        # Format toggle (Typst / LaTeX / Word)
         fmt_box = Gtk.Box(spacing=0)
         fmt_box.add_css_class("linked")
         fmt_box.set_valign(Gtk.Align.CENTER)
         self._fmt_btns: dict = {}
         fmt_group = None
-        for fmt_key, fmt_label in (("typst", "Typst"), ("latex", "LaTeX")):
+        _fmt_tooltips = {
+            "typst": "Generate a Typst template",
+            "latex": "Generate a LaTeX template",
+            "word":  "Generate a Word (.docx) template",
+        }
+        for fmt_key, fmt_label in (("typst", "Typst"), ("latex", "LaTeX"), ("word", "Word")):
             btn = Gtk.ToggleButton(label=fmt_label)
-            btn.set_tooltip_text(
-                "Generate a Typst template" if fmt_key == "typst"
-                else "Generate a LaTeX template"
-            )
+            btn.set_tooltip_text(_fmt_tooltips[fmt_key])
             if fmt_group is None:
                 fmt_group = btn
             else:
@@ -1414,6 +1417,16 @@ class GostWindow(Adw.ApplicationWindow):
 
     def _check_compiler_deps(self):
         from essay_builder.preview_compiler import typst_available, latex_available, image_tools_available
+        if self._format == "word":
+            self._preview_btn.set_sensitive(False)
+            self._preview_btn.set_tooltip_text("Compiled preview not available for Word format")
+            if not word_available():
+                self._compile_status.set_text(
+                    "python-docx not installed — install with: pip install python-docx"
+                )
+            else:
+                self._compile_status.set_text("Word format selected — click Export to save .docx")
+            return
         if self._format == "typst":
             if not typst_available():
                 self._preview_btn.set_sensitive(False)
@@ -1650,6 +1663,8 @@ class GostWindow(Adw.ApplicationWindow):
         state = self._collect_state()
         if self._format == "typst":
             return typst_generate(state)
+        if self._format == "word":
+            return "(Word/DOCX output is binary — use Export to save the .docx file.)"
         return generate(state)
 
     # ------------------------------------------------------------------
@@ -1723,26 +1738,31 @@ class GostWindow(Adw.ApplicationWindow):
             return
         self._format = btn._fmt_key
         is_latex = self._format == "latex"
+        is_typst = self._format == "typst"
+        is_word  = self._format == "word"
+        # Copy button: disable for Word (binary format, no meaningful text to copy)
+        self._copy_btn.set_sensitive(not is_word)
         self._copy_btn.set_tooltip_text(
-            "Copy LaTeX code to clipboard" if is_latex else "Copy Typst code to clipboard"
+            "Copy LaTeX code to clipboard" if is_latex
+            else "Copy Typst code to clipboard" if is_typst
+            else "Not available for Word format"
         )
         for w in self._latex_only_widgets:
             w.set_visible(is_latex)
-        # Notes rows: LaTeX notes hidden for typst, typst notes hidden for latex
         if hasattr(self, "_r_notes"):
             self._r_notes.set_visible(is_latex)
         if hasattr(self, "_r_typst_notes"):
-            self._r_typst_notes.set_visible(not is_latex)
+            self._r_typst_notes.set_visible(is_typst)
         if hasattr(self, "_latex_features_grp"):
             self._latex_features_grp.set_visible(is_latex)
         if hasattr(self, "_typst_features_grp"):
-            self._typst_features_grp.set_visible(not is_latex)
+            self._typst_features_grp.set_visible(is_typst)
         if hasattr(self, "_latex_preamble_grp"):
             self._latex_preamble_grp.set_visible(is_latex)
         if hasattr(self, "_typst_preamble_grp"):
-            self._typst_preamble_grp.set_visible(not is_latex)
+            self._typst_preamble_grp.set_visible(is_typst)
         if hasattr(self, "_r_typst_csl_row"):
-            self._r_typst_csl_row.set_visible(not is_latex)
+            self._r_typst_csl_row.set_visible(is_typst)
         if hasattr(self, "_r_bib_style_row"):
             self._r_bib_style_row.set_visible(is_latex)
         self._dirty_preview()
@@ -1855,6 +1875,8 @@ class GostWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _on_copy(self, _btn):
+        if self._format == "word":
+            return
         content = self._build_template()
         clipboard = Gdk.Display.get_default().get_clipboard()
         clipboard.set(content)
@@ -1872,16 +1894,29 @@ class GostWindow(Adw.ApplicationWindow):
         typ_filt.add_pattern("*.typ")
         typ_filt.set_name("Typst files (*.typ)")
 
+        docx_filt = Gtk.FileFilter()
+        docx_filt.add_pattern("*.docx")
+        docx_filt.set_name("Word document (*.docx)")
+
+        odt_filt = Gtk.FileFilter()
+        odt_filt.add_pattern("*.odt")
+        odt_filt.set_name("OpenDocument text (*.odt)")
+
         filters = Gio.ListStore.new(Gtk.FileFilter)
         if self._format == "typst":
             filters.append(typ_filt)
             filters.append(tex_filt)
+            ext = ".typ"
+        elif self._format == "word":
+            filters.append(docx_filt)
+            filters.append(odt_filt)
+            ext = ".docx"
         else:
             filters.append(tex_filt)
             filters.append(typ_filt)
+            ext = ".tex"
         dialog.set_filters(filters)
 
-        ext = ".typ" if self._format == "typst" else ".tex"
         raw_title = self._r_title.get_text() or "essay"
         slug = "".join(c if c.isalnum() else "-" for c in raw_title.lower()).strip("-")
         dialog.set_initial_name(f"{slug}{ext}")
@@ -1893,8 +1928,41 @@ class GostWindow(Adw.ApplicationWindow):
         except GLib.Error:
             return
         basename = gfile.get_basename()
-        use_typst = basename.endswith(".typ")
         state = self._collect_state()
+
+        if basename.endswith(".docx") or basename.endswith(".odt"):
+            if not word_available():
+                self._show_toast(
+                    "python-docx not installed — install with: pip install python-docx"
+                )
+                return
+            try:
+                docx_bytes = word_generate(state)
+                if basename.endswith(".odt"):
+                    odt_bytes = docx_to_odt(docx_bytes)
+                    if odt_bytes is None:
+                        self._show_toast(
+                            "LibreOffice not found — install it to export ODT, "
+                            "or export as .docx instead"
+                        )
+                        return
+                    content_bytes = odt_bytes
+                else:
+                    content_bytes = docx_bytes
+            except Exception as e:
+                self._show_toast(f"Export failed: {e}")
+                return
+            try:
+                gfile.replace_contents(
+                    content_bytes, None, False,
+                    Gio.FileCreateFlags.REPLACE_DESTINATION, None
+                )
+                self._show_toast(f"Exported {basename}")
+            except GLib.Error as e:
+                self._show_toast(f"Export failed: {e.message}")
+            return
+
+        use_typst = basename.endswith(".typ")
         content = typst_generate(state) if use_typst else generate(state)
         try:
             gfile.replace_contents(

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+
+# Build / distribution
+dist/
+build/
+
+# AppImage build artefacts
+AppDir/
+*.AppImage
+.appimage-tools/
+
+# Dev tooling
+.venv/
+venv/
+.env
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*~
+
+# Claude Code
+.claude/

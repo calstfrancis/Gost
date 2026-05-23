@@ -1,4 +1,4 @@
-# Gost v0.1.4
+# Gost v0.1.5
 
 **Released:** 2026-05-23
 
@@ -6,40 +6,53 @@
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.4-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
+| `gost-0.1.5-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
 
 ```bash
-chmod +x gost-0.1.4-x86_64.AppImage
-./gost-0.1.4-x86_64.AppImage
+chmod +x gost-0.1.5-x86_64.AppImage
+./gost-0.1.5-x86_64.AppImage
 ```
 
-Or install with [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
+Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
+
+### pip
+
+```bash
+pip install gost-academic          # LaTeX + Typst output
+pip install gost-academic[word]    # + Word / ODT export
+gost
+```
+
+> GTK4 and PyGObject must be installed as system packages. See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
 
 ---
 
 ## What's New
 
-### Three new citation styles
+### Word and ODT export
 
-| Style | Used by | BibLaTeX backend | Typst CSL |
-|-------|---------|-----------------|-----------|
-| **ASA** | American Sociological Association journals | `asa` | `american-sociological-association` |
-| **Turabian** | History and humanities students (Chicago student edition) | `chicago-notes` | `chicago-fullnote-bibliography` |
-| **Harvard** | UK / European / Australian universities | `authoryear` | `harvard-cite-them-right` |
+A new **Word** button sits alongside Typst and LaTeX in the header bar. Clicking Export with Word selected saves a fully styled `.docx` template:
 
-Each style wires up the correct heading rules, in-text or footnote citation mode, and page-numbering position automatically.
+- Correct margins, font, double spacing, and heading styles for all seven citation styles
+- Centered or left-aligned title block following MLA, APA, Chicago, SBL, ASA, Turabian, or Harvard conventions
+- Abstract placeholder (APA and ASA get a separate abstract page)
+- Bibliography / Works Cited / References section with hanging-indent sample entry and a Zotero Word plug-in tip
+- **ODT** — if LibreOffice is installed, choose `.odt` in the save dialog and it is converted automatically
 
-### UI improvements
+Word export requires `python-docx`. It is bundled in the AppImage. For source installs: `pip install gost-academic[word]`.
 
-- **Double spacing by default** — virtually every academic journal and course submission requires it; 1.5× was the previous default.
-- **Sidebar title bar removed** — the "Sections" header strip above the navigation list is gone; the nav list starts flush at the top.
-- **Hamburger menu** — Profiles, Style Packs, Import Journal, and About are now in a ⋮ menu. The header bar shows only Copy, Format toggle, Preview, and Export.
-- **Simple Mode** (on by default) — hides Chapters, Custom Code, and Grammar panels. Toggle in the ⋮ menu when you need them.
-- **Hover tooltips** — every control in every panel now has an accessibility tooltip.
+### PyPI
+
+Gost is now available on PyPI as `gost-academic`:
+
+```bash
+pip install gost-academic
+pip install gost-academic[word]   # includes python-docx for Word export
+```
 
 ---
 
-## Dependencies (unchanged)
+## Dependencies
 
 | Requirement | Notes |
 |---|---|
@@ -50,7 +63,11 @@ Each style wires up the correct heading rules, in-text or footnote citation mode
 
 **Compiled preview (optional):** `typst` for Typst output; `latexmk` + `poppler-tools` for LaTeX.
 
-**ASA style (optional):** requires the `biblatex-asa` LaTeX package (`tlmgr install biblatex-asa` or install via your TeX distribution).
+**Word export (optional):** `python-docx` (`pip install gost-academic[word]`). Bundled in the AppImage.
+
+**ODT export (optional):** LibreOffice (`libreoffice` or `soffice` in PATH).
+
+**ASA style (optional):** requires the `biblatex-asa` LaTeX package (`tlmgr install biblatex-asa`).
 
 ---
 

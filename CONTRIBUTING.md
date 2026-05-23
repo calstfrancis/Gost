@@ -8,6 +8,7 @@ essay_builder/
   window.py          — GostWindow (Adw.ApplicationWindow) — the entire UI
   texgen.py          — LaTeX template generator (no GTK dependency)
   typstgen.py        — Typst template generator (no GTK dependency)
+  wordgen.py         — Word/ODT template generator (optional python-docx dependency)
   config.py          — Persistent JSON config (~/.config/gost/config.json)
   preview_compiler.py — Compile .typ/.tex to PNG pages for in-app preview
   journal_importer.py — Parse .tex/.cls/.sty files and extract settings
