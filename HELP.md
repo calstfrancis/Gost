@@ -222,9 +222,42 @@ libadwaita is not installed or the typelib is missing.
 
 ---
 
+### Gost doesn't appear in the application launcher (pipx install)
+
+pipx installs the `gost` binary but does not place a `.desktop` file or icons in your local share directories. Run this once after installing:
+
+```bash
+gost-setup-desktop
+```
+
+This installs `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons to `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database. No root required. If Gost still doesn't appear, log out and back in.
+
+If you see `command not found: gost-setup-desktop`, make sure `~/.local/bin` is in your PATH and that your pipx install completed successfully:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc to persist
+gost-setup-desktop
+```
+
+---
+
 ### `ModuleNotFoundError: No module named 'gi'`
 
-PyGObject is not installed for your Python.
+PyGObject is not installed for your Python, or — if you used pipx — the isolated virtual environment cannot see the system-installed `gi` module.
+
+**pipx install:** reinstall with `--system-site-packages` so the venv inherits system packages:
+
+```bash
+pipx reinstall gost-academic --system-site-packages
+```
+
+If it's a fresh install:
+
+```bash
+pipx install gost-academic --system-site-packages
+```
+
+**System package** (required regardless of install method):
 
 - openSUSE: `zypper in python3-gobject`
 - Debian/Ubuntu: `apt install python3-gi`
@@ -247,7 +280,11 @@ PyGObject is not installed for your Python.
 Word and ODT export requires the `python-docx` package:
 
 ```bash
-pip install gost-academic[word]
+# pipx
+pipx inject gost-academic python-docx
+
+# pip
+pip install 'gost-academic[word]'
 ```
 
 If Gost was installed from the AppImage, python-docx is already bundled — this message should not appear. If it does, rebuild the AppImage with `bash build-appimage.sh`.

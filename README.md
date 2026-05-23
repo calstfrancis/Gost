@@ -34,20 +34,30 @@
 
 ## Installation
 
-### pip (recommended)
+### pipx (recommended)
 ```bash
-pip install gost-academic          # core app (LaTeX + Typst output)
-pip install gost-academic[word]    # + Word/ODT export via python-docx
-gost                      # launch
+pipx install gost-academic --system-site-packages
+pipx install 'gost-academic[word]' --system-site-packages  # + Word/ODT export
+gost-setup-desktop   # adds Gost to the application launcher
+gost
+```
+
+### pip
+```bash
+pip install gost-academic
+pip install 'gost-academic[word]'  # + Word/ODT export
+gost
 ```
 
 > **Note:** GTK4 and PyGObject must be installed as system packages first — pip cannot install them.
+> `--system-site-packages` is required with pipx so the isolated environment can access them.
+> Run `gost-setup-desktop` once after `pipx install` to add Gost to the GNOME launcher.
 > See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
 
 ### AppImage
 ```bash
-chmod +x gost-0.1.5-x86_64.AppImage
-./gost-0.1.5-x86_64.AppImage
+chmod +x gost-0.1.6-x86_64.AppImage
+./gost-0.1.6-x86_64.AppImage
 # Or install via Gear Lever for desktop integration
 ```
 
@@ -61,7 +71,7 @@ python3 -m essay_builder.app
 ### Build your own AppImage
 ```bash
 bash build-appimage.sh
-# Produces gost-0.1.5-x86_64.AppImage in the current directory
+# Produces gost-0.1.6-x86_64.AppImage in the current directory
 ```
 
 ## Usage
@@ -89,7 +99,8 @@ Common issues and distribution-specific install commands are in [HELP.md](HELP.m
 |---|---|
 | Preview button greyed out | Install `typst` (Typst) or `latexmk` + `poppler-tools` (LaTeX) |
 | `ImportError: cannot import name 'Adw'` | Install libadwaita typelib — see HELP.md |
-| `ModuleNotFoundError: No module named 'gi'` | Install PyGObject — see HELP.md |
+| `ModuleNotFoundError: No module named 'gi'` | Install PyGObject; with pipx reinstall using `--system-site-packages` — see HELP.md |
+| Gost not in application launcher (pipx) | Run `gost-setup-desktop` — see HELP.md |
 | `gtk-icon-theme-error-quark` warning | Install `adwaita-icon-theme` — see HELP.md |
 
 ## Roadmap

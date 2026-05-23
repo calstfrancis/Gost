@@ -37,6 +37,7 @@ word = ["python-docx>=1.0"]
 
 [project.scripts]
 gost = "essay_builder.app:main"
+gost-setup-desktop = "essay_builder.setup_desktop:main"
 
 [project.urls]
 Homepage = "https://github.com/calstfrancis/gost"

@@ -1,4 +1,4 @@
-# Gost v0.1.5
+# Gost v0.1.6
 
 **Released:** 2026-05-23
 
@@ -6,28 +6,65 @@
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.5-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
+| `gost-0.1.6-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
 
 ```bash
-chmod +x gost-0.1.5-x86_64.AppImage
-./gost-0.1.5-x86_64.AppImage
+chmod +x gost-0.1.6-x86_64.AppImage
+./gost-0.1.6-x86_64.AppImage
 ```
 
 Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
 
-### pip
+### pipx (recommended)
 
 ```bash
-pip install gost-academic          # LaTeX + Typst output
-pip install gost-academic[word]    # + Word / ODT export
+# 1. Install system dependencies (once)
+sudo zypper install python3-gobject typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1  # openSUSE
+# sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1                  # Debian/Ubuntu
+# sudo dnf install python3-gobject gtk4 libadwaita                          # Fedora
+
+# 2. Install Gost
+pipx install gost-academic --system-site-packages
+pipx install 'gost-academic[word]' --system-site-packages  # + Word / ODT export
+
+# 3. Add to application launcher
+gost-setup-desktop
+
+# 4. Run
 gost
 ```
 
-> GTK4 and PyGObject must be installed as system packages. See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
+> `--system-site-packages` is required so pipx can access the system-installed PyGObject and GTK4 typelibs, which cannot be installed via pip. Run `gost-setup-desktop` once after install to add Gost to your GNOME application launcher.
+
+### pip
+
+```bash
+pip install gost-academic
+pip install 'gost-academic[word]'  # + Word / ODT export
+gost
+```
 
 ---
 
-## What's New
+## What's New in v0.1.6
+
+### pipx desktop integration
+
+Running `gost` via pipx previously required finding the binary manually, and Gost did not appear in the GNOME application launcher. This release adds a `gost-setup-desktop` command that installs the `.desktop` file and application icons into your local user directories:
+
+```bash
+gost-setup-desktop
+```
+
+This places `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons under `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database automatically. Run it once after `pipx install`; no root required.
+
+### pipx `--system-site-packages` now documented
+
+The `ModuleNotFoundError: No module named 'gi'` error that pipx users encountered is caused by pipx's isolated virtual environment not having access to the system-installed PyGObject. The fix — `pipx install gost-academic --system-site-packages` — is now prominently documented in the install steps above and in HELP.md.
+
+---
+
+## Previous release — v0.1.5
 
 ### Word and ODT export
 
