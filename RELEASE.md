@@ -1,4 +1,4 @@
-# Gost v0.1.6.1
+# Gost v0.1.7
 
 **Released:** 2026-05-23
 
@@ -6,11 +6,11 @@
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.6.1-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
+| `gost-0.1.7-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
 
 ```bash
-chmod +x gost-0.1.6.1-x86_64.AppImage
-./gost-0.1.6.1-x86_64.AppImage
+chmod +x gost-0.1.7-x86_64.AppImage
+./gost-0.1.7-x86_64.AppImage
 ```
 
 Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
@@ -43,9 +43,17 @@ gost
 
 ---
 
-## What's New in v0.1.6.1
+## What's New in v0.1.7
 
-### pipx desktop integration
+### Simple mode in the header bar
+
+The **Simple** toggle is now permanently visible in the top panel of the app, next to the format buttons — no more hunting through the hamburger menu.
+
+### About dialog
+
+The author name in **Credits** now links to <https://calstfrancis.github.io>. The version string also reflects the actual installed package version.
+
+### pipx desktop integration (since v0.1.6.1)
 
 Running `gost` via pipx previously required finding the binary manually, and Gost did not appear in the GNOME application launcher. On first launch, Gost now automatically installs its `.desktop` file and application icons into your local user directories — no extra step required.
 

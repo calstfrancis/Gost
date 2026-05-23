@@ -55,8 +55,8 @@ gost
 
 ### AppImage
 ```bash
-chmod +x gost-0.1.6.1-x86_64.AppImage
-./gost-0.1.6.1-x86_64.AppImage
+chmod +x gost-0.1.7-x86_64.AppImage
+./gost-0.1.7-x86_64.AppImage
 # Or install via Gear Lever for desktop integration
 ```
 
@@ -70,7 +70,7 @@ python3 -m essay_builder.app
 ### Build your own AppImage
 ```bash
 bash build-appimage.sh
-# Produces gost-0.1.6.1-x86_64.AppImage in the current directory
+# Produces gost-0.1.7-x86_64.AppImage in the current directory
 ```
 
 ## Usage

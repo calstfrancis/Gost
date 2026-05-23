@@ -264,6 +264,22 @@ class GostWindow(Adw.ApplicationWindow):
             self._fmt_btns[fmt_key] = btn
         hbar.pack_start(fmt_box)
 
+        # Simple mode toggle — always visible in header bar
+        simple_box = Gtk.Box(spacing=4)
+        simple_box.set_valign(Gtk.Align.CENTER)
+        simple_lbl = Gtk.Label(label="Simple")
+        simple_lbl.add_css_class("caption")
+        self._simple_mode_switch = Gtk.Switch()
+        self._simple_mode_switch.set_active(self._simple_mode)
+        self._simple_mode_switch.set_valign(Gtk.Align.CENTER)
+        self._simple_mode_switch.set_tooltip_text(
+            "Hide Chapters, Custom Code and Grammar — recommended for everyday use"
+        )
+        self._simple_mode_switch.connect("notify::active", self._on_simple_mode_toggled)
+        simple_box.append(simple_lbl)
+        simple_box.append(self._simple_mode_switch)
+        hbar.pack_start(simple_box)
+
         # Export (primary / suggested action)
         export_btn = Gtk.Button(label="Export")
         export_btn.add_css_class("suggested-action")
@@ -426,26 +442,6 @@ class GostWindow(Adw.ApplicationWindow):
         box.set_margin_top(8);  box.set_margin_bottom(8)
         box.set_margin_start(4); box.set_margin_end(4)
         box.set_size_request(220, -1)
-
-        # Simple Mode toggle
-        mode_row = Gtk.Box(spacing=12)
-        mode_row.set_margin_start(12); mode_row.set_margin_end(8)
-        mode_row.set_margin_top(4);    mode_row.set_margin_bottom(4)
-        mode_lbl = Gtk.Label(label="Simple Mode")
-        mode_lbl.set_hexpand(True)
-        mode_lbl.set_xalign(0)
-        self._simple_mode_switch = Gtk.Switch()
-        self._simple_mode_switch.set_active(self._simple_mode)
-        self._simple_mode_switch.set_valign(Gtk.Align.CENTER)
-        self._simple_mode_switch.set_tooltip_text(
-            "Hide Chapters, Custom Code and Grammar — recommended for everyday use"
-        )
-        self._simple_mode_switch.connect("notify::active", self._on_simple_mode_toggled)
-        mode_row.append(mode_lbl)
-        mode_row.append(self._simple_mode_switch)
-        box.append(mode_row)
-
-        box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
         # Import Journal
         import_btn = Gtk.Button(label="Import Journal…")
@@ -1842,30 +1838,32 @@ class GostWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _show_about(self, _btn):
+        from essay_builder import __version__
         about = Adw.AboutWindow()
         about.set_transient_for(self)
         about.set_application_name("Gost")
-        about.set_version("0.1.4")
+        about.set_version(__version__)
         about.set_comments(
             "Academic Essay Templater.\n"
-            "Generate LaTeX and Typst templates for SBL, Chicago, MLA, and APA."
+            "Generate LaTeX and Typst templates for SBL, Chicago, MLA, APA, ASA, Turabian, and Harvard."
         )
-        about.set_developers(["Cal St Francis"])
+        about.set_developers(["Cal St Francis https://calstfrancis.github.io"])
         about.set_copyright("© 2025 Cal St Francis")
         about.set_license_type(Gtk.License.GPL_3_0)
         about.set_website("https://github.com/calstfrancis/gost")
         about.set_issue_url("https://github.com/calstfrancis/gost/issues")
         about.set_release_notes(
-            "<p>Version 1.2.0</p>"
+            "<p>Version 0.1.7</p>"
             "<ul>"
+            "<li>Simple mode toggle moved to the header bar — always visible</li>"
+            "<li>pipx desktop integration runs automatically on first launch</li>"
+            "<li>Word / ODT export</li>"
+            "<li>ASA, Turabian, and Harvard citation styles</li>"
             "<li>Compiled PDF preview (Typst and LaTeX)</li>"
-            "<li>Journal LaTeX template importer with security validation</li>"
+            "<li>Journal LaTeX template importer</li>"
             "<li>Running headers and footers panel</li>"
-            "<li>Typst endnotes support</li>"
-            "<li>Startup compiler dependency check — Preview button disabled with clear warning when typst/latexmk not found</li>"
             "<li>Template profiles (save/load/delete)</li>"
             "<li>Language support: Russian, Hebrew, Japanese, Tibetan, Sanskrit, Greek, Chinese</li>"
-            "<li>Defaults to Typst format</li>"
             "</ul>"
         )
         about.present()

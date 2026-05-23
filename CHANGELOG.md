@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.7] – 2026-05-23
+
+### Added
+- **Simple mode in header bar** — the Simple toggle is now always visible in the top panel, labelled "Simple", instead of being buried in the hamburger menu.
+- **About dialog developer link** — author name in Credits links to <https://calstfrancis.github.io>.
+
+### Fixed
+- About dialog version now reflects the actual package version (`__version__`) rather than a hardcoded string.
+
+---
+
+## [0.1.6.1] – 2026-05-23
+
+### Fixed
+- pipx desktop integration now runs automatically on first launch — no manual `gost-setup-desktop` step required.
+- `ModuleNotFoundError: No module named 'gi'` with pipx now documented; fix is `pipx install gost-academic --system-site-packages`.
+
+---
+
 ## [0.1.5] – 2026-05-23
 
 ### Added
