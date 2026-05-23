@@ -38,7 +38,6 @@
 ```bash
 pipx install gost-academic --system-site-packages
 pipx install 'gost-academic[word]' --system-site-packages  # + Word/ODT export
-gost-setup-desktop   # adds Gost to the application launcher
 gost
 ```
 
@@ -51,7 +50,7 @@ gost
 
 > **Note:** GTK4 and PyGObject must be installed as system packages first — pip cannot install them.
 > `--system-site-packages` is required with pipx so the isolated environment can access them.
-> Run `gost-setup-desktop` once after `pipx install` to add Gost to the GNOME launcher.
+> Desktop integration runs automatically on first launch.
 > See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
 
 ### AppImage

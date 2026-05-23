@@ -224,15 +224,15 @@ libadwaita is not installed or the typelib is missing.
 
 ### Gost doesn't appear in the application launcher (pipx install)
 
-pipx installs the `gost` binary but does not place a `.desktop` file or icons in your local share directories. Run this once after installing:
+Gost installs its `.desktop` file and icons automatically the first time you run `gost`. If the launcher entry is still missing, you can trigger it manually:
 
 ```bash
 gost-setup-desktop
 ```
 
-This installs `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons to `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database. No root required. If Gost still doesn't appear, log out and back in.
+This installs `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons to `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database. No root required. If Gost still doesn't appear after that, log out and back in.
 
-If you see `command not found: gost-setup-desktop`, make sure `~/.local/bin` is in your PATH and that your pipx install completed successfully:
+If you see `command not found: gost-setup-desktop`, make sure `~/.local/bin` is in your PATH:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc to persist

@@ -27,14 +27,11 @@ sudo zypper install python3-gobject typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1  # ope
 pipx install gost-academic --system-site-packages
 pipx install 'gost-academic[word]' --system-site-packages  # + Word / ODT export
 
-# 3. Add to application launcher
-gost-setup-desktop
-
-# 4. Run
+# 3. Run — desktop integration happens automatically on first launch
 gost
 ```
 
-> `--system-site-packages` is required so pipx can access the system-installed PyGObject and GTK4 typelibs, which cannot be installed via pip. Run `gost-setup-desktop` once after install to add Gost to your GNOME application launcher.
+> `--system-site-packages` is required so pipx can access the system-installed PyGObject and GTK4 typelibs, which cannot be installed via pip. Desktop integration (`.desktop` file and icons) is set up automatically on first launch.
 
 ### pip
 
@@ -50,13 +47,9 @@ gost
 
 ### pipx desktop integration
 
-Running `gost` via pipx previously required finding the binary manually, and Gost did not appear in the GNOME application launcher. This release adds a `gost-setup-desktop` command that installs the `.desktop` file and application icons into your local user directories:
+Running `gost` via pipx previously required finding the binary manually, and Gost did not appear in the GNOME application launcher. On first launch, Gost now automatically installs its `.desktop` file and application icons into your local user directories — no extra step required.
 
-```bash
-gost-setup-desktop
-```
-
-This places `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons under `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database automatically. Run it once after `pipx install`; no root required.
+This places `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons under `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database. A `gost-setup-desktop` command is also available if you ever need to reinstall the integration manually.
 
 ### pipx `--system-site-packages` now documented
 

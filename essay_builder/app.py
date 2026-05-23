@@ -153,7 +153,19 @@ class GostApp(Adw.Application):
             GLib.timeout_add(600, win.notify_fonts_installed)
 
 
+def _ensure_desktop_integration() -> None:
+    desktop = Path.home() / ".local/share/applications/ca.calstfrancis.Gost.desktop"
+    if desktop.exists():
+        return
+    try:
+        from essay_builder.setup_desktop import main as _setup
+        _setup()
+    except Exception:
+        pass
+
+
 def main():
+    _ensure_desktop_integration()
     logger.info("Launching application")
     app = GostApp()
     ret = app.run(sys.argv)
