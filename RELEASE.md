@@ -1,4 +1,4 @@
-# Gost v0.1.6
+# Gost v0.1.6.1
 
 **Released:** 2026-05-23
 
@@ -6,11 +6,11 @@
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.6-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
+| `gost-0.1.6.1-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
 
 ```bash
-chmod +x gost-0.1.6-x86_64.AppImage
-./gost-0.1.6-x86_64.AppImage
+chmod +x gost-0.1.6.1-x86_64.AppImage
+./gost-0.1.6.1-x86_64.AppImage
 ```
 
 Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
@@ -43,7 +43,7 @@ gost
 
 ---
 
-## What's New in v0.1.6
+## What's New in v0.1.6.1
 
 ### pipx desktop integration
 
