@@ -109,6 +109,31 @@ HEADER_STYLE_LABELS = [
 ]
 
 
+# Per-style layout/font presets applied when the user selects a citation style
+_STYLE_PRESETS = {
+    "SBL":      dict(font_pkg="times", font_size="12pt", paper="letterpaper",
+                     linespace="2", margin=1.0, parindent=1.5, numbered_heads=False,
+                     bib_sort="nyt", cite_cmd="autocite"),
+    "Chicago":  dict(font_pkg="times", font_size="12pt", paper="letterpaper",
+                     linespace="2", margin=1.0, parindent=1.5, numbered_heads=False,
+                     bib_sort="nyt", cite_cmd="footcite"),
+    "MLA":      dict(font_pkg="times", font_size="12pt", paper="letterpaper",
+                     linespace="2", margin=1.0, parindent=1.5, numbered_heads=False,
+                     bib_sort="nty", cite_cmd="parencite"),
+    "APA":      dict(font_pkg="times", font_size="12pt", paper="letterpaper",
+                     linespace="2", margin=1.0, parindent=1.5, numbered_heads=False,
+                     bib_sort="nyt", cite_cmd="parencite"),
+    "ASA":      dict(font_pkg="times", font_size="12pt", paper="letterpaper",
+                     linespace="2", margin=1.0, parindent=0.0, numbered_heads=False,
+                     bib_sort="nyt", cite_cmd="parencite"),
+    "Turabian": dict(font_pkg="times", font_size="12pt", paper="letterpaper",
+                     linespace="2", margin=1.0, parindent=1.5, numbered_heads=False,
+                     bib_sort="nyt", cite_cmd="footcite"),
+    "Harvard":  dict(font_pkg="times", font_size="12pt", paper="a4paper",
+                     linespace="2", margin=1.0, parindent=1.5, numbered_heads=False,
+                     bib_sort="nyt", cite_cmd="parencite"),
+}
+
 # ---------------------------------------------------------------------------
 # Main Window
 # ---------------------------------------------------------------------------
@@ -144,6 +169,8 @@ class GostWindow(Adw.ApplicationWindow):
         self._live_preview_timeout: int | None = None
         self._chapters: list = []
         self._grammar_checking = False
+        self._simple_mode: bool = self._config.get("simple_mode", True)
+        self._block_preset = False
 
         self._build_ui()
         self._check_compiler_deps()
@@ -204,45 +231,15 @@ class GostWindow(Adw.ApplicationWindow):
             subtitle="Academic Essay Templater"
         ))
 
-        self._copy_btn = Gtk.Button(label="Copy Typst")
+        # Copy button — icon-only; tooltip updated by _on_format_toggled
+        self._copy_btn = Gtk.Button()
+        self._copy_btn.set_icon_name("edit-copy-symbolic")
         self._copy_btn.add_css_class("flat")
+        self._copy_btn.set_tooltip_text("Copy Typst code to clipboard")
         self._copy_btn.connect("clicked", self._on_copy)
         hbar.pack_start(self._copy_btn)
 
-        profiles_btn = Gtk.MenuButton(label="Profiles")
-        profiles_btn.add_css_class("flat")
-        self._profiles_popover = self._build_profiles_popover()
-        profiles_btn.set_popover(self._profiles_popover)
-        hbar.pack_start(profiles_btn)
-
-        packs_btn = Gtk.MenuButton(label="Packs")
-        packs_btn.add_css_class("flat")
-        self._packs_popover = self._build_style_packs_popover()
-        packs_btn.set_popover(self._packs_popover)
-        hbar.pack_start(packs_btn)
-
-        import_btn = Gtk.Button(label="Import .tex")
-        import_btn.add_css_class("flat")
-        import_btn.connect("clicked", self._on_import_journal)
-        hbar.pack_start(import_btn)
-
-        export_btn = Gtk.Button(label="Export")
-        export_btn.add_css_class("suggested-action")
-        export_btn.connect("clicked", self._on_export)
-        hbar.pack_end(export_btn)
-
-        self._preview_btn = Gtk.Button(label="Preview")
-        self._preview_btn.add_css_class("flat")
-        self._preview_btn.connect("clicked", self._on_preview_btn)
-        hbar.pack_end(self._preview_btn)
-
-        about_btn = Gtk.Button()
-        about_btn.set_icon_name("help-about-symbolic")
-        about_btn.add_css_class("flat")
-        about_btn.connect("clicked", self._show_about)
-        hbar.pack_end(about_btn)
-
-        # Format toggle
+        # Format toggle (Typst / LaTeX)
         fmt_box = Gtk.Box(spacing=0)
         fmt_box.add_css_class("linked")
         fmt_box.set_valign(Gtk.Align.CENTER)
@@ -250,6 +247,10 @@ class GostWindow(Adw.ApplicationWindow):
         fmt_group = None
         for fmt_key, fmt_label in (("typst", "Typst"), ("latex", "LaTeX")):
             btn = Gtk.ToggleButton(label=fmt_label)
+            btn.set_tooltip_text(
+                "Generate a Typst template" if fmt_key == "typst"
+                else "Generate a LaTeX template"
+            )
             if fmt_group is None:
                 fmt_group = btn
             else:
@@ -258,7 +259,32 @@ class GostWindow(Adw.ApplicationWindow):
             btn.connect("toggled", self._on_format_toggled)
             fmt_box.append(btn)
             self._fmt_btns[fmt_key] = btn
-        hbar.pack_end(fmt_box)
+        hbar.pack_start(fmt_box)
+
+        # Export (primary / suggested action)
+        export_btn = Gtk.Button(label="Export")
+        export_btn.add_css_class("suggested-action")
+        export_btn.set_tooltip_text("Save the generated template to a file")
+        export_btn.connect("clicked", self._on_export)
+        hbar.pack_end(export_btn)
+
+        # Preview (compile & show)
+        self._preview_btn = Gtk.Button()
+        self._preview_btn.set_icon_name("document-print-preview-symbolic")
+        self._preview_btn.add_css_class("flat")
+        self._preview_btn.set_tooltip_text("Compile and preview the template as PDF")
+        self._preview_btn.connect("clicked", self._on_preview_btn)
+        hbar.pack_end(self._preview_btn)
+
+        # Hamburger menu — build sub-popovers first so the menu can embed them
+        self._profiles_popover = self._build_profiles_popover()
+        self._packs_popover    = self._build_style_packs_popover()
+        self._menu_btn = Gtk.MenuButton()
+        self._menu_btn.set_icon_name("open-menu-symbolic")
+        self._menu_btn.add_css_class("flat")
+        self._menu_btn.set_tooltip_text("More options")
+        self._menu_btn.set_popover(self._build_menu_popover())
+        hbar.pack_end(self._menu_btn)
 
         outer.append(hbar)
 
@@ -272,10 +298,6 @@ class GostWindow(Adw.ApplicationWindow):
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         sidebar_page.set_child(sidebar_box)
 
-        sidebar_hbar = Adw.HeaderBar()
-        sidebar_hbar.set_show_end_title_buttons(False)
-        sidebar_box.append(sidebar_hbar)
-
         self._nav_list = Gtk.ListBox()
         self._nav_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._nav_list.add_css_class("navigation-sidebar")
@@ -283,23 +305,35 @@ class GostWindow(Adw.ApplicationWindow):
         self._nav_list.connect("row-selected", self._on_nav_selected)
 
         nav_items = [
-            ("document-edit-symbolic",              "Title &amp; Authors",  "metadata"),
-            ("document-properties-symbolic",        "Citation Style",       "style"),
-            ("view-grid-symbolic",                  "Layout &amp; Spacing", "layout"),
-            ("application-x-addon-symbolic",        "Extra Packages",       "features"),
-            ("preferences-desktop-locale-symbolic", "Languages",            "languages"),
-            ("emblem-documents-symbolic",           "Headers &amp; Footers","headers"),
-            ("accessories-dictionary-symbolic",     "Bibliography",         "bib"),
-            ("view-list-ordered-symbolic",          "Chapters",             "chapters"),
-            ("text-editor-symbolic",                "Custom Code",          "custom_code"),
-            ("tools-check-spelling-symbolic",       "Grammar",              "grammar"),
-            ("document-print-preview-symbolic",     "Preview",              "preview"),
+            ("document-properties-symbolic",        "Citation Style",       "style",
+             "Citation format — choosing a style sets font, spacing, margins and bibliography defaults"),
+            ("document-edit-symbolic",              "Title &amp; Authors",  "metadata",
+             "Paper title, authors, date and affiliation"),
+            ("view-grid-symbolic",                  "Layout &amp; Spacing", "layout",
+             "Page size, margins, font size and line spacing"),
+            ("application-x-addon-symbolic",        "Extra Packages",       "features",
+             "Optional LaTeX / Typst packages (drop caps, tables, code listings…)"),
+            ("preferences-desktop-locale-symbolic", "Languages",            "languages",
+             "Multilingual typesetting: Cyrillic, Hebrew, CJK, Greek…"),
+            ("emblem-documents-symbolic",           "Headers &amp; Footers","headers",
+             "Running headers, page numbering and footer rules"),
+            ("accessories-dictionary-symbolic",     "Bibliography",         "bib",
+             "Bibliography file path, sorting and print options"),
+            ("view-list-ordered-symbolic",          "Chapters",             "chapters",
+             "Chapter list and multi-file project export"),
+            ("text-editor-symbolic",                "Custom Code",          "custom_code",
+             "Custom LaTeX preamble commands or Typst show rules"),
+            ("tools-check-spelling-symbolic",       "Grammar",              "grammar",
+             "Grammar and style check via LanguageTool"),
+            ("document-print-preview-symbolic",     "Preview",              "preview",
+             "Live compiled PDF preview"),
         ]
         self._nav_rows: dict = {}
-        for icon, label, key in nav_items:
+        for icon, label, key, tip in nav_items:
             row = Adw.ActionRow(title=label)
             row.add_prefix(Gtk.Image.new_from_icon_name(icon))
             row.set_activatable(True)
+            row.set_tooltip_text(tip)
             row._nav_key = key
             self._nav_list.append(row)
             self._nav_rows[key] = row
@@ -321,6 +355,9 @@ class GostWindow(Adw.ApplicationWindow):
         self._gost_font_switch = Gtk.Switch()
         self._gost_font_switch.set_valign(Gtk.Align.CENTER)
         self._gost_font_switch.set_active(self._config.get("use_gost_font", False))
+        self._gost_font_switch.set_tooltip_text(
+            "Apply the GOST Type B monospace font to the Gost interface"
+        )
         self._gost_font_switch.connect("notify::active", self._on_gost_font_toggled)
         font_row.append(font_lbl)
         font_row.append(self._gost_font_switch)
@@ -334,8 +371,8 @@ class GostWindow(Adw.ApplicationWindow):
         content_page.set_child(self._content_stack)
         self._nav_view.set_content(content_page)
 
-        self._build_metadata_panel()
         self._build_style_panel()
+        self._build_metadata_panel()
         self._build_layout_panel()
         self._build_features_panel()
         self._build_languages_panel()
@@ -348,8 +385,16 @@ class GostWindow(Adw.ApplicationWindow):
 
         self._nav_list.select_row(self._nav_list.get_row_at_index(0))
 
+        # Activate initial citation style after all panels exist so _apply_style_preset
+        # can reach layout/font/spacing widgets.
+        _init_style = self._cit_style if self._cit_style in self._style_btns else "SBL"
+        self._style_btns[_init_style].set_active(True)
+
         # Apply initial format AFTER all panels are built so visibility is correct
         self._fmt_btns[self._format].set_active(True)
+
+        # Apply simple mode (hides Chapters / Custom Code / Grammar when on)
+        self._apply_simple_mode(self._simple_mode)
 
         # CSS for compiled-preview page cards (white background + shadow,
         # so pages look correct regardless of whether GTK theme is dark or light)
@@ -367,6 +412,85 @@ class GostWindow(Adw.ApplicationWindow):
             css,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
+
+    # ------------------------------------------------------------------
+    # Hamburger menu popover
+    # ------------------------------------------------------------------
+
+    def _build_menu_popover(self) -> Gtk.Popover:
+        popover = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_margin_top(8);  box.set_margin_bottom(8)
+        box.set_margin_start(4); box.set_margin_end(4)
+        box.set_size_request(220, -1)
+
+        # Simple Mode toggle
+        mode_row = Gtk.Box(spacing=12)
+        mode_row.set_margin_start(12); mode_row.set_margin_end(8)
+        mode_row.set_margin_top(4);    mode_row.set_margin_bottom(4)
+        mode_lbl = Gtk.Label(label="Simple Mode")
+        mode_lbl.set_hexpand(True)
+        mode_lbl.set_xalign(0)
+        self._simple_mode_switch = Gtk.Switch()
+        self._simple_mode_switch.set_active(self._simple_mode)
+        self._simple_mode_switch.set_valign(Gtk.Align.CENTER)
+        self._simple_mode_switch.set_tooltip_text(
+            "Hide Chapters, Custom Code and Grammar — recommended for everyday use"
+        )
+        self._simple_mode_switch.connect("notify::active", self._on_simple_mode_toggled)
+        mode_row.append(mode_lbl)
+        mode_row.append(self._simple_mode_switch)
+        box.append(mode_row)
+
+        box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        # Import Journal
+        import_btn = Gtk.Button(label="Import Journal…")
+        import_btn.add_css_class("flat")
+        import_btn.set_tooltip_text("Import a journal's .cls / .tex / .sty template file")
+        import_btn.connect("clicked", lambda _b: (popover.popdown(),
+                                                   self._on_import_journal(None)))
+        box.append(import_btn)
+
+        # Style Packs — nested MenuButton keeps its own popover
+        packs_mb = Gtk.MenuButton(label="Style Packs")
+        packs_mb.add_css_class("flat")
+        packs_mb.set_tooltip_text("Apply a journal preset (JBL, Chicago, APA, MLA…)")
+        packs_mb.set_popover(self._packs_popover)
+        box.append(packs_mb)
+
+        # Profiles — nested MenuButton keeps its own popover
+        profiles_mb = Gtk.MenuButton(label="Profiles")
+        profiles_mb.add_css_class("flat")
+        profiles_mb.set_tooltip_text("Save and load named template configurations")
+        profiles_mb.set_popover(self._profiles_popover)
+        box.append(profiles_mb)
+
+        box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        about_btn = Gtk.Button(label="About Gost")
+        about_btn.add_css_class("flat")
+        about_btn.set_tooltip_text("Version, licence and acknowledgements")
+        about_btn.connect("clicked", lambda _b: (popover.popdown(),
+                                                  self._show_about(None)))
+        box.append(about_btn)
+
+        popover.set_child(box)
+        return popover
+
+    def _on_simple_mode_toggled(self, switch, _param):
+        self._apply_simple_mode(switch.get_active())
+
+    def _apply_simple_mode(self, active: bool) -> None:
+        self._simple_mode = active
+        self._config.set("simple_mode", active)
+        advanced = ("chapters", "custom_code", "grammar")
+        for key in advanced:
+            if key in self._nav_rows:
+                self._nav_rows[key].set_visible(not active)
+        # If the currently shown panel is being hidden, fall back to metadata
+        if active and self._content_stack.get_visible_child_name() in advanced:
+            self._nav_list.select_row(self._nav_list.get_row_at_index(0))
 
     # ------------------------------------------------------------------
     # Profiles popover
@@ -484,8 +608,10 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_col_sep.set_value(float(s.get("col_sep", 14)))
 
         cit = s.get("cit_style", "SBL")
+        self._block_preset = True
         if cit in self._style_btns:
             self._style_btns[cit].set_active(True)
+        self._block_preset = False
         self._r_bib_style.set_text(s.get("biblatex_style", ""))
         self._r_notes.set_selected({"footnote": 0, "endnote": 1, "none": 2}.get(
             s.get("notes_mode", "footnote"), 0))
@@ -507,13 +633,13 @@ class GostWindow(Adw.ApplicationWindow):
 
         self._r_encoding.set_selected({"utf8": 0, "latin1": 1}.get(s.get("encoding", "utf8"), 0))
 
-        font_key = s.get("font_pkg", "ebgaramond")
+        font_key = s.get("font_pkg", "times")
         for i, opt in enumerate(FONT_OPTIONS):
             if opt["key"] == font_key:
                 self._r_font_pkg.set_selected(i)
                 break
 
-        self._r_linespace.set_selected({"1": 0, "1.5": 1, "2": 2}.get(s.get("linespace", "1.5"), 1))
+        self._r_linespace.set_selected({"1": 0, "1.5": 1, "2": 2}.get(s.get("linespace", "2"), 2))
         self._r_bib_sort.set_selected(
             {"nyt": 0, "nty": 1, "none": 2, "ynt": 3}.get(s.get("bib_sort", "nyt"), 0))
         self._r_cite_cmd.set_selected(
@@ -568,10 +694,14 @@ class GostWindow(Adw.ApplicationWindow):
         box.append(grp)
 
         self._r_title    = _entry_row("Title")
+        self._r_title.set_tooltip_text("Paper title — appears in the running header and PDF metadata")
         self._r_subtitle = _entry_row("Subtitle", "optional")
         self._r_authors  = _entry_row("Author(s)", "Comma-separated for multiple")
+        self._r_authors.set_tooltip_text("One author, or comma-separated list: Alice Smith, Bob Jones")
         self._r_affil    = _entry_row("Affiliation", "Atlantic School of Theology")
+        self._r_affil.set_tooltip_text("University, department or institution")
         self._r_course   = _entry_row("Course / Context", "e.g. THEO 5210")
+        self._r_course.set_tooltip_text("Course code or context line printed below the author")
 
         saved_authors = self._config.get("authors", "")
         if saved_authors:
@@ -585,6 +715,7 @@ class GostWindow(Adw.ApplicationWindow):
             grp.add(r)
 
         date_row = Adw.ActionRow(title="Date")
+        date_row.set_tooltip_text("Leave blank to insert today's date automatically")
         self._date_entry = Gtk.Entry()
         self._date_entry.set_placeholder_text(r"YYYY-MM-DD  or  leave blank for \today")
         self._date_entry.set_valign(Gtk.Align.CENTER)
@@ -593,6 +724,7 @@ class GostWindow(Adw.ApplicationWindow):
         today_btn = Gtk.Button(label="Today")
         today_btn.set_valign(Gtk.Align.CENTER)
         today_btn.add_css_class("flat")
+        today_btn.set_tooltip_text("Insert today's date (YYYY-MM-DD)")
         today_btn.connect("clicked", self._set_today)
         date_row.add_suffix(self._date_entry)
         date_row.add_suffix(today_btn)
@@ -631,11 +763,23 @@ class GostWindow(Adw.ApplicationWindow):
         box.append(grp)
 
         style_row = Adw.ActionRow(title="Base style")
-        style_box = Gtk.Box(spacing=4)
+        style_row.set_tooltip_text(
+            "Sets citation format, default heading style and bibliography defaults"
+        )
+        style_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         style_box.set_valign(Gtk.Align.CENTER)
+        style_row1 = Gtk.Box(spacing=4)
+        style_row2 = Gtk.Box(spacing=4)
+        style_box.append(style_row1)
+        style_box.append(style_row2)
         self._style_btns: dict = {}
         style_group = None
-        for s in ("SBL", "Chicago", "MLA", "APA"):
+        _style_rows = {
+            "SBL": style_row1, "Chicago": style_row1,
+            "MLA": style_row1, "APA": style_row1,
+            "ASA": style_row2, "Turabian": style_row2, "Harvard": style_row2,
+        }
+        for s in ("SBL", "Chicago", "MLA", "APA", "ASA", "Turabian", "Harvard"):
             btn = Gtk.ToggleButton(label=s)
             btn.add_css_class("flat")
             if style_group is None:
@@ -644,29 +788,39 @@ class GostWindow(Adw.ApplicationWindow):
                 btn.set_group(style_group)
             btn._style_key = s
             btn.connect("toggled", self._on_style_toggled)
-            style_box.append(btn)
+            _style_rows[s].append(btn)
             self._style_btns[s] = btn
         style_row.add_suffix(style_box)
         grp.add(style_row)
 
         self._r_bib_style = _entry_row("BibLaTeX style string")
+        self._r_bib_style.set_tooltip_text(
+            "BibLaTeX style key, e.g. verbose-note, chicago-notes, apa, mla"
+        )
         self._r_bib_style.set_text("verbose-note")
         self._r_bib_style.connect("changed", lambda *_: self._dirty_preview())
         grp.add(self._r_bib_style)
         self._latex_only_widgets.append(self._r_bib_style)
 
         self._r_notes = _combo_row("Notes mode (LaTeX)", ["Footnotes", "Endnotes", "None"])
+        self._r_notes.set_tooltip_text(
+            "Footnotes (default), endnotes, or inline citations with no note apparatus"
+        )
         self._r_notes.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_notes)
         self._latex_only_widgets.append(self._r_notes)
 
         self._r_typst_notes = _combo_row("Notes mode (Typst)", ["Footnotes", "Endnotes"])
+        self._r_typst_notes.set_tooltip_text(
+            "Footnotes (default) or endnotes for Typst documents"
+        )
         self._r_typst_notes.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_typst_notes)
         # will be shown/hidden by _on_format_toggled; start hidden (format starts as typst)
         self._r_typst_notes.set_visible(True)  # visible for typst
 
         self._r_numbered = _switch_row("Heading numbering")
+        self._r_numbered.set_tooltip_text("Number headings: 1. Introduction, 1.1 Background…")
         self._r_numbered.connect("notify::active", lambda *_: self._dirty_preview())
         grp.add(self._r_numbered)
 
@@ -674,11 +828,17 @@ class GostWindow(Adw.ApplicationWindow):
             "Style-appropriate headings",
             "Apply titlesec / #show heading rules for the chosen style"
         )
+        self._r_style_headings.set_tooltip_text(
+            "Apply font, size and spacing rules for the selected citation style"
+        )
         self._r_style_headings.set_active(True)
         self._r_style_headings.connect("notify::active", lambda *_: self._dirty_preview())
         grp.add(self._r_style_headings)
 
         self._r_use_parts = _switch_row(r"Include \part level")
+        self._r_use_parts.set_tooltip_text(
+            r"Add a \part level above chapter — useful for book-length work"
+        )
         self._r_use_parts.connect("notify::active", lambda *_: self._dirty_preview())
         grp.add(self._r_use_parts)
         self._latex_only_widgets.append(self._r_use_parts)
@@ -688,17 +848,32 @@ class GostWindow(Adw.ApplicationWindow):
 
         font_display_names = [opt["display"] for opt in FONT_OPTIONS]
         self._r_font_pkg = _combo_row("Font", font_display_names)
+        self._r_font_pkg.set_tooltip_text(
+            "Font package — XeLaTeX or LuaLaTeX required for OpenType (non-pdfLaTeX) fonts"
+        )
+        # Default to Times (index matches FONT_OPTIONS order)
+        _times_idx = next((i for i, o in enumerate(FONT_OPTIONS) if o["key"] == "times"), 3)
+        self._r_font_pkg.set_selected(_times_idx)
         self._r_font_pkg.connect("notify::selected", self._on_font_selected)
         grp2.add(self._r_font_pkg)
 
         self._r_engine_row = Adw.ActionRow(title="Engine")
+        self._r_engine_row.set_tooltip_text(
+            "LaTeX engine — XeLaTeX is recommended (OpenType fonts, Unicode input)"
+        )
         eng_box = Gtk.Box(spacing=4)
         eng_box.set_valign(Gtk.Align.CENTER)
         self._engine_btns: dict = {}
         eng_group = None
+        _eng_tips = {
+            "pdfLaTeX": "Fast, PDF-native; no OpenType font support",
+            "XeLaTeX":  "OpenType fonts, Unicode input — recommended",
+            "LuaLaTeX": "OpenType fonts, Lua scripting, slower compile",
+        }
         for e in ("pdfLaTeX", "XeLaTeX", "LuaLaTeX"):
             btn = Gtk.ToggleButton(label=e)
             btn.add_css_class("flat")
+            btn.set_tooltip_text(_eng_tips[e])
             if eng_group is None:
                 eng_group = btn
             else:
@@ -713,11 +888,13 @@ class GostWindow(Adw.ApplicationWindow):
         self._latex_only_widgets.append(self._r_engine_row)
 
         self._r_encoding = _combo_row("Input encoding", ["utf8", "latin1"])
+        self._r_encoding.set_tooltip_text(
+            "Source file encoding — use utf8 unless your .tex file was saved as latin1"
+        )
         self._r_encoding.connect("notify::selected", lambda *_: self._dirty_preview())
         grp2.add(self._r_encoding)
         self._latex_only_widgets.append(self._r_encoding)
 
-        self._style_btns["SBL"].set_active(True)
         self._content_stack.add_named(scroll, "style")
 
     def _on_font_selected(self, *args):
@@ -752,6 +929,9 @@ class GostWindow(Adw.ApplicationWindow):
         box.append(grp)
 
         paper_row = Adw.ActionRow(title="Paper size")
+        paper_row.set_tooltip_text(
+            "Sets the \\documentclass paper option and Typst page dimensions"
+        )
         paper_box = Gtk.Box(spacing=4)
         paper_box.set_valign(Gtk.Align.CENTER)
         self._paper_btns: dict = {}
@@ -772,10 +952,14 @@ class GostWindow(Adw.ApplicationWindow):
         grp.add(paper_row)
 
         self._r_margin = _spin_row("Margin (inches)", 0.5, 3.0, 0.25, 1.0)
+        self._r_margin.set_tooltip_text(
+            "Page margin in inches, applied to all four sides via the geometry package"
+        )
         self._r_margin.connect("notify::value", lambda *_: self._dirty_preview())
         grp.add(self._r_margin)
 
         fs_row = Adw.ActionRow(title="Font size")
+        fs_row.set_tooltip_text("Base font size for body text")
         fs_box = Gtk.Box(spacing=4)
         fs_box.set_valign(Gtk.Align.CENTER)
         self._fs_btns: dict = {}
@@ -796,7 +980,10 @@ class GostWindow(Adw.ApplicationWindow):
         grp.add(fs_row)
 
         self._r_linespace = _combo_row("Line spacing", ["Single", "1.5×", "Double"])
-        self._r_linespace.set_selected(1)
+        self._r_linespace.set_tooltip_text(
+            "Line spacing — double spacing is standard for most academic submissions"
+        )
+        self._r_linespace.set_selected(2)
         self._r_linespace.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_linespace)
 
@@ -805,20 +992,26 @@ class GostWindow(Adw.ApplicationWindow):
         self._latex_only_widgets.append(self._multicol_grp)
 
         self._r_use_multicol = _switch_row("Enable multicol")
+        self._r_use_multicol.set_tooltip_text(
+            "Wrap body text in the multicol environment (LaTeX only)"
+        )
         self._r_use_multicol.connect("notify::active", self._on_multicol_toggled)
         self._multicol_grp.add(self._r_use_multicol)
 
         self._r_num_cols = _spin_row("Number of columns", 2, 4, 1, 2)
+        self._r_num_cols.set_tooltip_text("Number of columns (2–4)")
         self._r_num_cols.connect("notify::value", lambda *_: self._dirty_preview())
         self._r_num_cols.set_sensitive(False)
         self._multicol_grp.add(self._r_num_cols)
 
         self._r_col_rule = _switch_row("Column separator rule")
+        self._r_col_rule.set_tooltip_text("Draw a vertical rule between columns")
         self._r_col_rule.connect("notify::active", lambda *_: self._dirty_preview())
         self._r_col_rule.set_sensitive(False)
         self._multicol_grp.add(self._r_col_rule)
 
         self._r_col_sep = _spin_row("Column sep width (pt)", 4, 40, 1, 14)
+        self._r_col_sep.set_tooltip_text("Space between columns in points")
         self._r_col_sep.connect("notify::value", lambda *_: self._dirty_preview())
         self._r_col_sep.set_sensitive(False)
         self._multicol_grp.add(self._r_col_sep)
@@ -827,15 +1020,21 @@ class GostWindow(Adw.ApplicationWindow):
         box.append(grp3)
 
         self._r_parindent = _spin_row("Paragraph indent (em)", 0, 4, 0.5, 1.5)
+        self._r_parindent.set_tooltip_text("First-line indent at the start of each paragraph in em units")
         self._r_parindent.connect("notify::value", lambda *_: self._dirty_preview())
         grp3.add(self._r_parindent)
 
         self._r_parskip = _spin_row("Paragraph skip (pt)", 0, 18, 1, 0)
+        self._r_parskip.set_tooltip_text("Extra vertical space between paragraphs in points (0 = no extra skip)")
         self._r_parskip.connect("notify::value", lambda *_: self._dirty_preview())
         grp3.add(self._r_parskip)
         self._latex_only_widgets.append(self._r_parskip)
 
         self._r_microtype = _switch_row("Microtype (protrusion)")
+        self._r_microtype.set_tooltip_text(
+            "Micro-typographic character protrusion and font expansion — "
+            "improves line breaking and justified text (pdfLaTeX / LuaLaTeX)"
+        )
         self._r_microtype.set_active(True)
         self._r_microtype.connect("notify::active", lambda *_: self._dirty_preview())
         grp3.add(self._r_microtype)
@@ -929,6 +1128,9 @@ class GostWindow(Adw.ApplicationWindow):
         box.append(grp)
 
         self._r_header_style = _combo_row("Header style", HEADER_STYLE_LABELS)
+        self._r_header_style.set_tooltip_text(
+            "What appears in the running header above each page"
+        )
         self._r_header_style.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_header_style)
 
@@ -936,12 +1138,18 @@ class GostWindow(Adw.ApplicationWindow):
             "Header rule",
             "Horizontal rule below the running header (LaTeX only)"
         )
+        self._r_header_rule.set_tooltip_text(
+            "Draw a \\hrule beneath the running header (LaTeX fancyhdr)"
+        )
         self._r_header_rule.connect("notify::active", lambda *_: self._dirty_preview())
         grp.add(self._r_header_rule)
 
         self._r_suppress_first = _switch_row(
             "Suppress on first page",
             "No header on the title page"
+        )
+        self._r_suppress_first.set_tooltip_text(
+            "Omit the running header on the title page — standard in most citation styles"
         )
         self._r_suppress_first.set_active(True)
         self._r_suppress_first.connect("notify::active", lambda *_: self._dirty_preview())
@@ -964,6 +1172,9 @@ class GostWindow(Adw.ApplicationWindow):
         box.append(grp)
 
         self._r_bib_file = _entry_row("Path to .bib file")
+        self._r_bib_file.set_tooltip_text(
+            "Absolute or relative path to your Zotero-exported .bib file"
+        )
         self._r_bib_file.set_show_apply_button(True)
         saved_bib = self._config.get("bib_file", "")
         if saved_bib:
@@ -973,11 +1184,17 @@ class GostWindow(Adw.ApplicationWindow):
         grp.add(self._r_bib_file)
 
         self._r_print_bib = _switch_row("Print bibliography at end")
+        self._r_print_bib.set_tooltip_text(
+            r"Append a \printbibliography / bibliography section at the end of the document"
+        )
         self._r_print_bib.set_active(True)
         self._r_print_bib.connect("notify::active", lambda *_: self._dirty_preview())
         grp.add(self._r_print_bib)
 
         self._r_bib_heading = _entry_row("Bibliography heading")
+        self._r_bib_heading.set_tooltip_text(
+            "Heading text for the bibliography section (e.g. References, Works Cited)"
+        )
         self._r_bib_heading.set_text("Bibliography")
         self._r_bib_heading.connect("changed", lambda *_: self._dirty_preview())
         grp.add(self._r_bib_heading)
@@ -987,12 +1204,16 @@ class GostWindow(Adw.ApplicationWindow):
             ["Author–Year–Title (nyt)", "Author–Title–Year (nty)",
              "None (citation order)", "Year–Name–Title (ynt)"]
         )
+        self._r_bib_sort.set_tooltip_text("BibLaTeX sorting scheme for the bibliography list")
         self._r_bib_sort.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_bib_sort)
 
         self._r_cite_cmd = _combo_row(
             "Default cite command",
             [r"\autocite", r"\footcite", r"\parencite", r"\cite"]
+        )
+        self._r_cite_cmd.set_tooltip_text(
+            "Default citation command used in the generated template body"
         )
         self._r_cite_cmd.connect("notify::selected", lambda *_: self._dirty_preview())
         grp.add(self._r_cite_cmd)
@@ -1011,6 +1232,7 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_typst_csl.connect("changed", lambda *_: self._dirty_preview())
         csl_browse_btn = Gtk.Button(label="Browse CSL styles…")
         csl_browse_btn.add_css_class("flat")
+        csl_browse_btn.set_tooltip_text("Browse and search the built-in list of CSL citation styles")
         csl_browse_btn.connect("clicked", self._on_csl_browse)
         csl_box.append(self._r_typst_csl)
         csl_box.append(csl_browse_btn)
@@ -1056,8 +1278,13 @@ class GostWindow(Adw.ApplicationWindow):
         mode_box.add_css_class("linked")
         self._prev_mode_btns: dict = {}
         prev_grp = None
+        _mode_tips = {
+            "source":   "View the generated source code",
+            "compiled": "Compile and display the rendered PDF",
+        }
         for mode_key, mode_lbl in (("source", "Source"), ("compiled", "Compiled")):
             btn = Gtk.ToggleButton(label=mode_lbl)
+            btn.set_tooltip_text(_mode_tips[mode_key])
             if prev_grp is None:
                 prev_grp = btn
             else:
@@ -1071,6 +1298,7 @@ class GostWindow(Adw.ApplicationWindow):
 
         refresh_btn = Gtk.Button(label="Refresh")
         refresh_btn.add_css_class("flat")
+        refresh_btn.set_tooltip_text("Regenerate the source preview from current settings")
         refresh_btn.connect("clicked", lambda *_: self._refresh_source())
         toolbar.append(refresh_btn)
 
@@ -1079,6 +1307,7 @@ class GostWindow(Adw.ApplicationWindow):
 
         open_btn = Gtk.Button(label="Open PDF")
         open_btn.add_css_class("flat")
+        open_btn.set_tooltip_text("Compile and open the PDF in your system viewer")
         open_btn.connect("clicked", self._open_in_viewer)
         toolbar.append(open_btn)
 
@@ -1430,11 +1659,41 @@ class GostWindow(Adw.ApplicationWindow):
     def _on_style_toggled(self, btn):
         if btn.get_active():
             self._cit_style = btn._style_key
-            defaults = STYLE_DEFAULTS[self._cit_style]
+            defaults = STYLE_DEFAULTS.get(self._cit_style, STYLE_DEFAULTS["APA"])
             self._r_bib_style.set_text(defaults["biblatex_style"])
-            note_idx = {"footnote": 0, "endnote": 1, "none": 2}[defaults["notes"]]
+            note_idx = {"footnote": 0, "endnote": 1, "none": 2}.get(defaults["notes"], 0)
             self._r_notes.set_selected(note_idx)
+            if not self._block_preset:
+                self._apply_style_preset(self._cit_style)
             self._dirty_preview()
+
+    def _apply_style_preset(self, style: str) -> None:
+        p = _STYLE_PRESETS.get(style)
+        if not p:
+            return
+        if hasattr(self, "_r_font_pkg"):
+            for i, opt in enumerate(FONT_OPTIONS):
+                if opt["key"] == p["font_pkg"]:
+                    self._r_font_pkg.set_selected(i)
+                    break
+        if hasattr(self, "_fs_btns") and p["font_size"] in self._fs_btns:
+            self._fs_btns[p["font_size"]].set_active(True)
+        if hasattr(self, "_paper_btns") and p["paper"] in self._paper_btns:
+            self._paper_btns[p["paper"]].set_active(True)
+        if hasattr(self, "_r_linespace"):
+            self._r_linespace.set_selected({"1": 0, "1.5": 1, "2": 2}.get(p["linespace"], 2))
+        if hasattr(self, "_r_margin"):
+            self._r_margin.set_value(p["margin"])
+        if hasattr(self, "_r_parindent"):
+            self._r_parindent.set_value(p["parindent"])
+        if hasattr(self, "_r_numbered"):
+            self._r_numbered.set_active(p["numbered_heads"])
+        if hasattr(self, "_r_bib_sort"):
+            self._r_bib_sort.set_selected(
+                {"nyt": 0, "nty": 1, "none": 2, "ynt": 3}.get(p["bib_sort"], 0))
+        if hasattr(self, "_r_cite_cmd"):
+            self._r_cite_cmd.set_selected(
+                {"autocite": 0, "footcite": 1, "parencite": 2, "cite": 3}.get(p["cite_cmd"], 0))
 
     def _on_engine_toggled(self, btn):
         if btn.get_active():
@@ -1464,7 +1723,9 @@ class GostWindow(Adw.ApplicationWindow):
             return
         self._format = btn._fmt_key
         is_latex = self._format == "latex"
-        self._copy_btn.set_label("Copy TeX" if is_latex else "Copy Typst")
+        self._copy_btn.set_tooltip_text(
+            "Copy LaTeX code to clipboard" if is_latex else "Copy Typst code to clipboard"
+        )
         for w in self._latex_only_widgets:
             w.set_visible(is_latex)
         # Notes rows: LaTeX notes hidden for typst, typst notes hidden for latex
@@ -1564,7 +1825,7 @@ class GostWindow(Adw.ApplicationWindow):
         about = Adw.AboutWindow()
         about.set_transient_for(self)
         about.set_application_name("Gost")
-        about.set_version("1.2.0")
+        about.set_version("0.1.4")
         about.set_comments(
             "Academic Essay Templater.\n"
             "Generate LaTeX and Typst templates for SBL, Chicago, MLA, and APA."
@@ -1723,6 +1984,7 @@ class GostWindow(Adw.ApplicationWindow):
         add_btn = Gtk.Button(label="Add Chapter")
         add_btn.add_css_class("pill")
         add_btn.set_halign(Gtk.Align.START)
+        add_btn.set_tooltip_text("Add a new chapter entry to the list")
         add_btn.connect("clicked", lambda *_: self._add_chapter())
         outer.append(add_btn)
 
@@ -1730,6 +1992,9 @@ class GostWindow(Adw.ApplicationWindow):
         folder_btn.add_css_class("suggested-action")
         folder_btn.add_css_class("pill")
         folder_btn.set_halign(Gtk.Align.START)
+        folder_btn.set_tooltip_text(
+            "Export main.tex (or main.typ) plus one file per chapter into a chosen folder"
+        )
         folder_btn.connect("clicked", self._on_export_folder)
         outer.append(folder_btn)
 
@@ -1920,11 +2185,16 @@ class GostWindow(Adw.ApplicationWindow):
         outer.append(grp)
 
         self._r_grammar_lang = _combo_row("Language", LANGUAGE_NAMES)
+        self._r_grammar_lang.set_tooltip_text("Language for grammar and style checking")
         grp.add(self._r_grammar_lang)
 
         api_row = Adw.EntryRow(title="API URL (blank = public)")
         api_row.set_text("")
         api_row.set_show_apply_button(False)
+        api_row.set_tooltip_text(
+            "Leave blank to use the free public LanguageTool API, "
+            "or enter a self-hosted instance URL"
+        )
         self._r_grammar_api = api_row
         grp.add(api_row)
 
@@ -1948,6 +2218,9 @@ class GostWindow(Adw.ApplicationWindow):
         btn_row = Gtk.Box(spacing=8)
         check_btn = Gtk.Button(label="Check Grammar")
         check_btn.add_css_class("suggested-action")
+        check_btn.set_tooltip_text(
+            "Send the text to LanguageTool for grammar and style analysis"
+        )
         check_btn.connect("clicked", self._on_grammar_check)
         self._grammar_spinner = Gtk.Spinner()
         self._grammar_status = Gtk.Label(label="")

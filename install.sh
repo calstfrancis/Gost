@@ -50,7 +50,7 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
             typelib-1_0-Gtk-4_0 \
             typelib-1_0-Adw-1 \
             libadwaita \
-            librsvg \
+            rsvg-convert \
             gtk4-tools
     else
         die "Cannot install without required dependencies."
@@ -110,14 +110,14 @@ sudo mkdir -p "${ICON_DIR_BASE}/symbolic/apps"
 
 if [[ -f "$SCRIPT_DIR/icons/gost.svg" ]]; then
     sudo cp "$SCRIPT_DIR/icons/gost.svg" \
-        "${ICON_DIR_BASE}/scalable/apps/gost.svg"
+        "${ICON_DIR_BASE}/scalable/apps/ca.calstfrancis.Gost.svg"
 else
     warn "gost.svg not found – will show generic icon"
 fi
 
 if [[ -f "$SCRIPT_DIR/icons/gost-symbolic.svg" ]]; then
     sudo cp "$SCRIPT_DIR/icons/gost-symbolic.svg" \
-        "${ICON_DIR_BASE}/symbolic/apps/gost-symbolic.svg"
+        "${ICON_DIR_BASE}/symbolic/apps/ca.calstfrancis.Gost-symbolic.svg"
 fi
 
 if command -v rsvg-convert &>/dev/null && [[ -f "$SCRIPT_DIR/icons/gost.svg" ]]; then
@@ -125,12 +125,12 @@ if command -v rsvg-convert &>/dev/null && [[ -f "$SCRIPT_DIR/icons/gost.svg" ]];
         sudo mkdir -p "${ICON_DIR_BASE}/${SIZE}x${SIZE}/apps"
         rsvg-convert -w "$SIZE" -h "$SIZE" \
             "$SCRIPT_DIR/icons/gost.svg" \
-            | sudo tee "${ICON_DIR_BASE}/${SIZE}x${SIZE}/apps/gost.png" \
+            | sudo tee "${ICON_DIR_BASE}/${SIZE}x${SIZE}/apps/ca.calstfrancis.Gost.png" \
             > /dev/null
     done
     info "PNG icons generated."
 else
-    warn "rsvg-convert not found or SVG missing; only scalable icon installed."
+    warn "rsvg-convert not found; only scalable SVG icon installed (install rsvg-convert for PNG sizes)."
 fi
 
 if command -v gtk4-update-icon-cache &>/dev/null; then
@@ -145,15 +145,15 @@ fi
 info "Installing desktop entry..."
 sudo mkdir -p "$DESKTOP_DIR"
 if [[ -f "$SCRIPT_DIR/gost.desktop" ]]; then
-    sudo cp "$SCRIPT_DIR/gost.desktop" "${DESKTOP_DIR}/gost.desktop"
+    sudo cp "$SCRIPT_DIR/gost.desktop" "${DESKTOP_DIR}/ca.calstfrancis.Gost.desktop"
 else
-    sudo tee "${DESKTOP_DIR}/gost.desktop" > /dev/null << 'DESKTOP'
+    sudo tee "${DESKTOP_DIR}/ca.calstfrancis.Gost.desktop" > /dev/null << 'DESKTOP'
 [Desktop Entry]
 Name=Gost
 GenericName=Academic Essay Templater
 Comment=Generate LaTeX and Typst templates for academic essays
 Exec=/usr/local/bin/gost
-Icon=gost
+Icon=ca.calstfrancis.Gost
 Terminal=false
 Type=Application
 Categories=Education;Office;
@@ -162,7 +162,7 @@ StartupNotify=true
 StartupWMClass=ca.calstfrancis.Gost
 DESKTOP
 fi
-sudo chmod 644 "${DESKTOP_DIR}/gost.desktop"
+sudo chmod 644 "${DESKTOP_DIR}/ca.calstfrancis.Gost.desktop"
 
 if command -v update-desktop-database &>/dev/null; then
     sudo update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true

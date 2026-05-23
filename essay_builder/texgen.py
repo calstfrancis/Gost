@@ -6,10 +6,13 @@ No GTK dependency; import and test freely.
 from typing import Dict, List, Any
 
 STYLE_DEFAULTS: Dict[str, Dict[str, str]] = {
-    "SBL":     {"biblatex_style": "verbose-note",  "notes": "footnote"},
-    "Chicago": {"biblatex_style": "chicago-notes", "notes": "footnote"},
-    "MLA":     {"biblatex_style": "mla",           "notes": "none"},
-    "APA":     {"biblatex_style": "apa",           "notes": "none"},
+    "SBL":      {"biblatex_style": "verbose-note",  "notes": "footnote"},
+    "Chicago":  {"biblatex_style": "chicago-notes", "notes": "footnote"},
+    "MLA":      {"biblatex_style": "mla",           "notes": "none"},
+    "APA":      {"biblatex_style": "apa",           "notes": "none"},
+    "ASA":      {"biblatex_style": "asa",           "notes": "none"},
+    "Turabian": {"biblatex_style": "chicago-notes", "notes": "footnote"},
+    "Harvard":  {"biblatex_style": "authoryear",    "notes": "none"},
 }
 
 PDFLATEX_FONTS: Dict[str, str | None] = {
@@ -30,9 +33,14 @@ FONTSPEC_FONTS: Dict[str, str] = {
         r"  BoldItalicFont = *-BoldItalic," + "\n"
         r"]"
     ),
+    "times": (
+        r"\usepackage{fontspec}" + "\n"
+        r"\setmainfont{Times New Roman}"
+    ),
 }
 
-FONTSPEC_ONLY = set(FONTSPEC_FONTS.keys())
+# Fonts that require fontspec and have no pdfLaTeX fallback
+FONTSPEC_ONLY = {"junicode"}
 
 FONT_OPTIONS: List[Dict[str, Any]] = [
     {"display": "Junicode (fontspec)", "key": "junicode", "requires_fontspec": True},
@@ -81,6 +89,32 @@ HEADING_STYLES: Dict[str, List[str]] = {
         r"\titlespacing*{\section}{0pt}{2ex}{0.5ex}",
         r"\titlespacing*{\subsection}{0pt}{1.5ex}{0ex}",
         r"\titlespacing*{\subsubsection}{0pt}{1.25ex}{0ex}",
+    ],
+    "ASA": [
+        r"\usepackage{titlesec}",
+        r"% ASA Style Guide — centered bold (level 1), flush-left bold (level 2)",
+        r"\titleformat{\section}[block]{\normalfont\large\bfseries\centering}{}{0em}{}",
+        r"\titleformat{\subsection}[block]{\normalfont\normalsize\bfseries}{}{0em}{}",
+        r"\titleformat{\subsubsection}[block]{\normalfont\normalsize\itshape}{}{0em}{}",
+        r"\titlespacing*{\section}{0pt}{2ex}{0.5ex}",
+        r"\titlespacing*{\subsection}{0pt}{1.5ex}{0ex}",
+    ],
+    "Turabian": [
+        r"\usepackage{titlesec}",
+        r"% Turabian (Chicago student edition) — centered bold",
+        r"\titleformat{\section}[block]{\normalfont\large\bfseries\centering}{}{0em}{}",
+        r"\titleformat{\subsection}[block]{\normalfont\normalsize\bfseries\centering}{}{0em}{}",
+        r"\titleformat{\subsubsection}[block]{\normalfont\normalsize\itshape\centering}{}{0em}{}",
+        r"\titlespacing*{\section}{0pt}{2ex}{1ex}",
+    ],
+    "Harvard": [
+        r"\usepackage{titlesec}",
+        r"% Harvard referencing — centered bold (level 1), flush-left bold (level 2)",
+        r"\titleformat{\section}[block]{\normalfont\large\bfseries\centering}{}{0em}{}",
+        r"\titleformat{\subsection}[block]{\normalfont\normalsize\bfseries}{}{0em}{}",
+        r"\titleformat{\subsubsection}[block]{\normalfont\normalsize\bfseries\itshape}{}{0em}{}",
+        r"\titlespacing*{\section}{0pt}{2ex}{0.5ex}",
+        r"\titlespacing*{\subsection}{0pt}{1.5ex}{0ex}",
     ],
 }
 
@@ -264,8 +298,9 @@ def generate(s: Dict[str, Any]) -> str:
     fs       = s.get("font_size",      "11pt")
     paper    = s.get("paper",          "letterpaper")
 
-    bib_sty  = s.get("biblatex_style") or STYLE_DEFAULTS[cit]["biblatex_style"]
-    notes    = s.get("notes_mode")     or STYLE_DEFAULTS[cit]["notes"]
+    _cit_def = STYLE_DEFAULTS.get(cit, STYLE_DEFAULTS["APA"])
+    bib_sty  = s.get("biblatex_style") or _cit_def["biblatex_style"]
+    notes    = s.get("notes_mode")     or _cit_def["notes"]
 
     title    = s.get("title",          "")
     subtitle = s.get("subtitle",       "")
@@ -282,7 +317,7 @@ def generate(s: Dict[str, Any]) -> str:
 
     margin      = s.get("margin",      "1.00")
     linespace   = s.get("linespace",   "1.5")
-    font_pkg    = s.get("font_pkg",    "ebgaramond")
+    font_pkg    = s.get("font_pkg",    "times")
     parindent   = s.get("parindent",   "1.5")
     parskip     = s.get("parskip",     "0")
     microtype   = s.get("microtype",   True)

@@ -10,8 +10,9 @@
     <p>
       Gost is a native GTK4 / libadwaita desktop application that generates
       fully-configured LaTeX and Typst essay templates for academic writing.
-      It supports SBL, Chicago (Notes), MLA, and APA 7th edition citation styles,
-      each with correct heading formatting, page numbering, and running headers.
+      It supports SBL, Chicago (Notes), MLA, APA 7th edition, ASA, Turabian,
+      and Harvard citation styles, each with correct heading formatting,
+      page numbering, and running headers.
     </p>
     <p>Key features:</p>
     <ul>
@@ -44,13 +45,12 @@
   </screenshots>
 
   <releases>
-    <release version="1.2.0" date="2026-05-22">
+    <release version="0.1.4" date="2026-05-23">
       <description>
         <p>
-          Adds live-debounced preview, custom preamble editor, chapter management
-          with multi-file project export, 10 journal style packs, 42-entry CSL
-          style browser, LanguageTool grammar check, and startup compiler
-          dependency warnings.
+          Adds ASA, Turabian, and Harvard citation styles; double spacing as default;
+          decluttered header bar with hamburger menu; Simple Mode for everyday use;
+          hover tooltips throughout; and removal of the sidebar title bar.
         </p>
       </description>
     </release>

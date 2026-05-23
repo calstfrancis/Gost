@@ -1,47 +1,77 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
-    <linearGradient id="docgrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3584e4"/>
-      <stop offset="100%" stop-color="#1c6cc9"/>
+    <!-- Warm academic paper gradient -->
+    <linearGradient id="gp" x1="0" y1="0" x2="0.12" y2="1">
+      <stop offset="0%" stop-color="#fdf9f2"/>
+      <stop offset="100%" stop-color="#ede5d0"/>
     </linearGradient>
-    <linearGradient id="pagegrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#f0f0f0"/>
+    <!-- GNOME blue header gradient -->
+    <linearGradient id="gh" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#62aafc"/>
+      <stop offset="100%" stop-color="#2779e4"/>
     </linearGradient>
+    <!-- Fold inner face gradient -->
+    <linearGradient id="gf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0e8d8"/>
+      <stop offset="100%" stop-color="#ddd0b8"/>
+    </linearGradient>
+    <!-- Subtle drop shadow -->
+    <filter id="gs" x="-12%" y="-8%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4.5" flood-color="#00000022"/>
+    </filter>
   </defs>
 
-  <!-- Shadow -->
-  <rect x="22" y="18" width="84" height="100" rx="8" fill="rgba(0,0,0,0.15)"/>
+  <!-- ── Document card ── -->
+  <rect x="14" y="10" width="90" height="110"
+        rx="10" ry="10"
+        fill="url(#gp)"
+        filter="url(#gs)"
+        stroke="#c8b88a" stroke-width="0.75"/>
 
-  <!-- Document body -->
-  <rect x="18" y="14" width="84" height="100" rx="8" fill="url(#pagegrad)" stroke="#c0c0c0" stroke-width="1"/>
+  <!-- ── Blue header band ── -->
+  <rect x="14" y="10" width="90" height="36" rx="10" fill="url(#gh)"/>
+  <!-- flat bottom of header to cover the rounded bottom edge of the rect above -->
+  <rect x="14" y="32" width="90" height="14" fill="url(#gh)"/>
 
-  <!-- Folded corner -->
-  <polygon points="80,14 102,36 80,36" fill="#d0d0d0"/>
-  <polygon points="80,14 102,14 102,36" fill="#e8e8e8"/>
+  <!-- ── Dog-ear fold corner (top-right, over the header) ── -->
+  <!-- Crease shadow (the cavity behind the fold) -->
+  <path d="M 78 10 L 104 37 L 78 37 Z" fill="#7a6840" opacity="0.28"/>
+  <!-- Fold face (the back of the paper, cream) -->
+  <path d="M 78 10 L 104 10 L 104 37 Z" fill="url(#gf)" stroke="#c8b48a" stroke-width="0.5"/>
 
-  <!-- Blue accent bar top -->
-  <rect x="18" y="14" width="84" height="12" rx="8" fill="url(#docgrad)"/>
-  <rect x="18" y="20" width="84" height="6" fill="url(#docgrad)"/>
-
+  <!-- ── Header content: Г lettermark + title block ── -->
+  <!-- Cyrillic Г — ГОСТ lettermark, path-rendered so no font dependency -->
+  <!-- Shape: horizontal bar top-left to top-right, vertical bar down the left side -->
+  <path d="M 21 13 L 36 13 L 36 17.5 L 25.5 17.5 L 25.5 35 L 21 35 Z"
+        fill="white" opacity="0.93"/>
+  <!-- Thin vertical rule separating the lettermark from the title block -->
+  <rect x="39" y="15" width="0.75" height="19" fill="white" opacity="0.25"/>
   <!-- Title line -->
-  <rect x="30" y="40" width="52" height="5" rx="2.5" fill="#3584e4" opacity="0.9"/>
-
+  <rect x="42" y="17" width="28" height="4.5" rx="2" fill="white" opacity="0.88"/>
   <!-- Author line -->
-  <rect x="36" y="50" width="40" height="3.5" rx="1.75" fill="#888" opacity="0.7"/>
+  <rect x="42" y="26" width="20" height="3" rx="1.5" fill="white" opacity="0.5"/>
 
-  <!-- Rule -->
-  <rect x="28" y="58" width="56" height="1" fill="#3584e4" opacity="0.3"/>
+  <!-- ── Body: academic paper structure ── -->
 
-  <!-- Text lines -->
-  <rect x="28" y="64" width="56" height="3" rx="1.5" fill="#555" opacity="0.5"/>
-  <rect x="28" y="71" width="56" height="3" rx="1.5" fill="#555" opacity="0.5"/>
-  <rect x="28" y="78" width="44" height="3" rx="1.5" fill="#555" opacity="0.5"/>
+  <!-- Abstract block: tighter grouped lines, slightly inset -->
+  <rect x="28" y="54" width="64" height="2.8" rx="1.4" fill="#5c4f3a" opacity="0.3"/>
+  <rect x="28" y="60" width="64" height="2.8" rx="1.4" fill="#5c4f3a" opacity="0.3"/>
+  <rect x="28" y="66" width="48" height="2.8" rx="1.4" fill="#5c4f3a" opacity="0.3"/>
 
-  <!-- Section heading -->
-  <rect x="28" y="88" width="36" height="3.5" rx="1.75" fill="#3584e4" opacity="0.7"/>
+  <!-- Horizontal rule (subtle blue) -->
+  <rect x="20" y="74" width="80" height="0.75" fill="#3584e4" opacity="0.22"/>
 
-  <!-- More text -->
-  <rect x="28" y="96" width="56" height="3" rx="1.5" fill="#555" opacity="0.5"/>
-  <rect x="28" y="103" width="48" height="3" rx="1.5" fill="#555" opacity="0.5"/>
+  <!-- Section heading 1 — blue pill -->
+  <rect x="20" y="79" width="54" height="4.5" rx="2.25" fill="#3584e4" opacity="0.65"/>
+
+  <!-- Body paragraph lines -->
+  <rect x="20" y="88" width="80" height="2.8" rx="1.4" fill="#5c4f3a" opacity="0.27"/>
+  <rect x="20" y="94" width="80" height="2.8" rx="1.4" fill="#5c4f3a" opacity="0.27"/>
+  <rect x="20" y="100" width="58" height="2.8" rx="1.4" fill="#5c4f3a" opacity="0.27"/>
+
+  <!-- Section heading 2 — slightly smaller blue pill -->
+  <rect x="20" y="108" width="42" height="4.5" rx="2.25" fill="#3584e4" opacity="0.52"/>
+
+  <!-- Trailing line (page not yet full — adds depth) -->
+  <rect x="20" y="116" width="80" height="2.5" rx="1.25" fill="#5c4f3a" opacity="0.18"/>
 </svg>

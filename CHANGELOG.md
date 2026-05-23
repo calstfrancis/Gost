@@ -1,6 +1,28 @@
 # Changelog
 
-## [1.2.0] – 2026-05-22
+## [0.1.4] – 2026-05-23
+
+### Added
+- **ASA citation style** — American Sociological Association author-date; centered-bold headings; `asa` BibLaTeX backend; `american-sociological-association` CSL for Typst.
+- **Turabian citation style** — student edition of Chicago Notes-Bibliography; uses `chicago-notes` / `chicago-fullnote-bibliography`.
+- **Harvard citation style** — author-date widely used in UK/European/Australian academia; `authoryear` BibLaTeX backend; `harvard-cite-them-right` CSL for Typst.
+- **Hamburger menu** — Profiles, Style Packs, Import Journal, and About moved out of the header bar into a ⋮ menu, decluttering the toolbar.
+- **Simple Mode toggle** (on by default) — hides Chapters, Custom Code, and Grammar panels for everyday use; accessible from the hamburger menu.
+- **Hover tooltips** — every control in every panel now has an accessibility tooltip describing its purpose.
+
+### Changed
+- **Default line spacing** is now **Double** — standard requirement for most academic journal and course submissions.
+- **Sidebar title bar removed** — the "Sections" header strip above the navigation list is gone; the list now starts at the top of the sidebar.
+- Citation style selector is now displayed in two rows (SBL / Chicago / MLA / APA on top; ASA / Turabian / Harvard below) to accommodate the expanded set without crowding.
+- Copy button in header bar is now icon-only; tooltip updates to reflect current format (Typst or LaTeX).
+- Preview button in header bar is now icon-only.
+
+### Fixed
+- `_on_format_toggled` no longer calls `set_label()` on the icon-only copy button.
+
+---
+
+## [0.1.2] – 2026-05-22
 
 ### Added
 - **Compiled preview** — click the header-bar Preview button to compile the template via `typst` or `latexmk` and render the actual PDF pages as images inside the app. Falls back gracefully when the compiler is not installed.
@@ -26,7 +48,7 @@
 
 ---
 
-## [1.1.0] – 2026-05-06
+## [0.1.1] – 2026-05-06
 
 ### Added
 - Typst template generation (`.typ` output).
@@ -48,7 +70,7 @@
 
 ---
 
-## [1.0.0] – initial release
+## [0.1.0] – initial release
 
 - Original monolithic `essay_builder.py`.
 - LaTeX-only output with SBL, Chicago, MLA, APA styles.

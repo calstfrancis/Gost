@@ -4,7 +4,7 @@
 
 ## Features
 
-- **Citation styles** — SBL, Chicago (Notes), MLA, APA 7th edition — each applies the correct heading formatting, page numbering, and running headers automatically
+- **Citation styles** — SBL, Chicago (Notes), MLA, APA 7th ed., ASA, Turabian, Harvard — each applies the correct heading formatting, page numbering, and running headers automatically
 - **Two output formats** — Typst (default) and LaTeX, chosen by file extension at save time
 - **Compiled preview** — click **Preview** in the header bar to compile the template and display rendered pages (requires `typst` or `latexmk`)
 - **Template profiles** — save, load, and delete named configurations
@@ -36,8 +36,8 @@
 
 ### AppImage
 ```bash
-chmod +x gost-1.2.0-x86_64.AppImage
-./gost-1.2.0-x86_64.AppImage
+chmod +x gost-0.1.4-x86_64.AppImage
+./gost-0.1.4-x86_64.AppImage
 # Or install via Gear Lever for desktop integration
 ```
 
@@ -51,7 +51,7 @@ python3 -m essay_builder.app
 ### Build your own AppImage
 ```bash
 bash build-appimage.sh
-# Produces gost-1.2.0-x86_64.AppImage in the current directory
+# Produces gost-0.1.4-x86_64.AppImage in the current directory
 ```
 
 ## Usage

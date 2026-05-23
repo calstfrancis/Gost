@@ -6,10 +6,13 @@ No GTK dependency; import and test freely.
 from typing import Dict, Any, List
 
 TYPST_CIT_STYLES: Dict[str, str] = {
-    "SBL":     "chicago-notes",
-    "Chicago": "chicago-notes",
-    "MLA":     "mla",
-    "APA":     "apa",
+    "SBL":      "chicago-notes",
+    "Chicago":  "chicago-notes",
+    "MLA":      "mla",
+    "APA":      "apa",
+    "ASA":      "american-sociological-association",
+    "Turabian": "chicago-fullnote-bibliography",
+    "Harvard":  "harvard-cite-them-right",
 }
 
 TYPST_FONTS: Dict[str, str | None] = {
@@ -118,6 +121,55 @@ TYPST_HEADING_STYLES: Dict[str, List[str]] = {
         "#show heading.where(level: 4): it => {",
         "  v(0.4em)",
         "  emph(it.body)",
+        "  v(0.1em)",
+        "}",
+    ],
+    "ASA": [
+        "// ASA Style Guide — centered bold (level 1), flush-left bold (level 2)",
+        "#show heading.where(level: 1): it => {",
+        "  v(0.8em)",
+        "  align(center, strong(it.body))",
+        "  v(0.4em)",
+        "}",
+        "#show heading.where(level: 2): it => {",
+        "  v(0.6em)",
+        "  strong(it.body)",
+        "  v(0.2em)",
+        "}",
+        "#show heading.where(level: 3): it => {",
+        "  v(0.5em)",
+        "  emph(it.body)",
+        "  v(0.1em)",
+        "}",
+    ],
+    "Turabian": [
+        "// Turabian (Chicago student edition) — centered bold headings",
+        "#show heading.where(level: 1): it => {",
+        "  v(0.8em)",
+        "  align(center, strong(it.body))",
+        "  v(0.4em)",
+        "}",
+        "#show heading.where(level: 2): it => {",
+        "  v(0.6em)",
+        "  align(center, strong(emph(it.body)))",
+        "  v(0.2em)",
+        "}",
+    ],
+    "Harvard": [
+        "// Harvard referencing — centered bold (level 1), flush-left bold (level 2)",
+        "#show heading.where(level: 1): it => {",
+        "  v(0.8em)",
+        "  align(center, strong(it.body))",
+        "  v(0.4em)",
+        "}",
+        "#show heading.where(level: 2): it => {",
+        "  v(0.6em)",
+        "  strong(it.body)",
+        "  v(0.2em)",
+        "}",
+        "#show heading.where(level: 3): it => {",
+        "  v(0.5em)",
+        "  strong(emph(it.body))",
         "  v(0.1em)",
         "}",
     ],
@@ -262,7 +314,7 @@ def generate(s: Dict[str, Any]) -> str:
 
     margin    = s.get("margin",    "1.00")
     linespace = s.get("linespace", "1.5")
-    font_pkg  = s.get("font_pkg",  "ebgaramond")
+    font_pkg  = s.get("font_pkg",  "times")
     parindent = s.get("parindent", "1.5")
 
     numbered        = s.get("numbered_heads",    False)
@@ -318,7 +370,7 @@ def generate(s: Dict[str, Any]) -> str:
     L.append("#set page(")
     L.append('  paper: "{}",'.format(paper_name))
     L.append("  margin: {}in,".format(margin))
-    if cit in ("MLA", "APA"):
+    if cit in ("MLA", "APA", "ASA"):
         L.append('  numbering: "1",')
         L.append("  number-align: right + top,")
     else:

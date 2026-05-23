@@ -17,7 +17,7 @@ step()  { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="$(python3 -c "from essay_builder import __version__; print(__version__)" 2>/dev/null || echo "1.2.0")"
+VERSION="$(python3 -c "from essay_builder import __version__; print(__version__)" 2>/dev/null || echo "0.1.4")"
 ARCH="$(uname -m)"
 APP_ID="ca.calstfrancis.Gost"
 APPDIR="${SCRIPT_DIR}/AppDir"
@@ -155,13 +155,13 @@ cat > "${APPDIR}/${APP_ID}.desktop" << DESKTOP
 [Desktop Entry]
 Name=Gost
 GenericName=Academic Essay Templater
-Comment=Generate LaTeX and Typst templates for academic essays (SBL, Chicago, MLA, APA)
+Comment=Generate LaTeX and Typst templates for academic essays (SBL, Chicago, MLA, APA, ASA, Turabian, Harvard)
 Exec=gost
 Icon=${APP_ID}
 Terminal=false
 Type=Application
 Categories=Education;Office;
-Keywords=latex;tex;typst;essay;academic;bibliography;sbl;chicago;apa;mla;theology;humanities;
+Keywords=latex;tex;typst;essay;academic;bibliography;sbl;chicago;apa;mla;asa;turabian;harvard;sociology;theology;humanities;
 StartupNotify=true
 StartupWMClass=${APP_ID}
 X-AppImage-Name=Gost
@@ -225,8 +225,9 @@ cat > "${APPDIR}/usr/share/metainfo/${APP_ID}.metainfo.xml" << XML
     <p>
       Gost is a native GTK4 / libadwaita desktop application that generates
       fully-configured LaTeX and Typst essay templates for academic writing.
-      It supports SBL, Chicago (Notes), MLA, and APA 7th edition citation styles,
-      each with correct heading formatting, page numbering, and running headers.
+      It supports SBL, Chicago (Notes), MLA, APA 7th edition, ASA, Turabian,
+      and Harvard citation styles, each with correct heading formatting,
+      page numbering, and running headers.
     </p>
     <p>Key features:</p>
     <ul>
@@ -262,10 +263,9 @@ cat > "${APPDIR}/usr/share/metainfo/${APP_ID}.metainfo.xml" << XML
     <release version="${VERSION}" date="${TODAY}">
       <description>
         <p>
-          Adds live-debounced preview, custom preamble editor, chapter management
-          with multi-file project export, 10 journal style packs, 42-entry CSL
-          style browser, LanguageTool grammar check, and startup compiler
-          dependency warnings.
+          Adds ASA, Turabian, and Harvard citation styles; double spacing as default;
+          decluttered header bar with hamburger menu; Simple Mode for everyday use;
+          hover tooltips throughout; and removal of the sidebar title bar.
         </p>
       </description>
     </release>
@@ -290,6 +290,10 @@ cat > "${APPDIR}/usr/share/metainfo/${APP_ID}.metainfo.xml" << XML
 XML
 
 info "AppStream metainfo written"
+# appimagetool looks for .appdata.xml; symlink the modern .metainfo.xml name
+mkdir -p "${APPDIR}/usr/share/appdata"
+ln -sf "../metainfo/${APP_ID}.metainfo.xml" \
+    "${APPDIR}/usr/share/appdata/${APP_ID}.appdata.xml"
 
 # ── Pack with appimagetool ────────────────────────────────────────────────────
 step "Packing AppImage"

@@ -11,7 +11,20 @@
       "Bash(python3 -c \"import gi; gi.require_version\\('Gtk','4.0'\\); gi.require_version\\('Adw','1'\\); from gi.repository import Gtk,Adw; print\\('GTK',Gtk.MAJOR_VERSION,Gtk.MINOR_VERSION\\); print\\('Adw',Adw.VERSION_S\\)\")",
       "Bash(python3 -c \"import gi; gi.require_version\\('Adw','1'\\); from gi.repository import Adw; print\\('adwaita ok'\\)\")",
       "Bash(chmod +x *)",
-      "Bash(bash *)"
+      "Bash(bash *)",
+      "Bash(rsvg-convert --version)",
+      "Bash(inkscape --version)",
+      "Bash(convert --version)",
+      "Bash(cairosvg --version)",
+      "Bash(python3 -c \"import cairosvg; print\\('cairosvg ok'\\)\")",
+      "Read(//home/calstfrancis/.local/share/applications/**)",
+      "Read(//home/calstfrancis/.local/share/icons/hicolor/scalable/apps/**)",
+      "Read(//usr/local/share/icons/hicolor/scalable/apps/**)",
+      "Read(//usr/share/icons/hicolor/scalable/apps/**)",
+      "Read(//usr/local/share/applications/**)",
+      "Read(//usr/local/share/icons/hicolor/**)",
+      "Read(//home/calstfrancis/.local/share/icons/**)",
+      "Read(//home/calstfrancis/Desktop/**)"
     ]
   }
 }
