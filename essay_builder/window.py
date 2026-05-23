@@ -172,9 +172,14 @@ class GostWindow(Adw.ApplicationWindow):
         self._grammar_checking = False
         self._simple_mode: bool = self._config.get("simple_mode", True)
         self._block_preset = False
+        self._source_manually_edited: bool = False
+        self._updating_source_buf: bool = False
+        self._live_preview_visible: bool = self._config.get("live_preview_visible", True)
 
         self._build_ui()
         self._check_compiler_deps()
+        if self._live_preview_visible:
+            GLib.timeout_add(800, self._initial_live_compile)
 
         # Apply saved GOST font preference on startup
         if self._config.get("use_gost_font", False):
@@ -295,6 +300,15 @@ class GostWindow(Adw.ApplicationWindow):
         self._preview_btn.connect("clicked", self._on_preview_btn)
         hbar.pack_end(self._preview_btn)
 
+        # Live preview toggle
+        self._live_btn = Gtk.ToggleButton()
+        self._live_btn.set_icon_name("view-columns-symbolic")
+        self._live_btn.add_css_class("flat")
+        self._live_btn.set_tooltip_text("Show / hide live preview pane")
+        self._live_btn.set_active(self._live_preview_visible)
+        self._live_btn.connect("toggled", self._on_live_preview_toggled)
+        hbar.pack_end(self._live_btn)
+
         # Hamburger menu — build sub-popovers first so the menu can embed them
         self._profiles_popover = self._build_profiles_popover()
         self._packs_popover    = self._build_style_packs_popover()
@@ -385,9 +399,24 @@ class GostWindow(Adw.ApplicationWindow):
         self._nav_view.set_sidebar(sidebar_page)
 
         content_page = Adw.NavigationPage(title="Gost")
+
+        # Split: settings stack on the left, live preview pane on the right
+        self._content_paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self._content_paned.set_wide_handle(True)
+
         self._content_stack = Gtk.Stack()
         self._content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        content_page.set_child(self._content_stack)
+        self._content_stack.set_hexpand(True)
+        self._content_paned.set_start_child(self._content_stack)
+        self._content_paned.set_resize_start_child(True)
+        self._content_paned.set_shrink_start_child(False)
+
+        self._live_pane = self._build_live_preview_pane()
+        self._content_paned.set_end_child(self._live_pane)
+        self._content_paned.set_resize_end_child(False)
+        self._content_paned.set_shrink_end_child(True)
+
+        content_page.set_child(self._content_paned)
         self._nav_view.set_content(content_page)
 
         self._build_style_panel()
@@ -415,6 +444,14 @@ class GostWindow(Adw.ApplicationWindow):
         # Apply simple mode (hides Chapters / Custom Code / Grammar when on)
         self._apply_simple_mode(self._simple_mode)
 
+        # Set initial paned position once the window is realised
+        def _set_paned_pos(*_):
+            w = self.get_width() or 960
+            self._content_paned.set_position(max(400, w - 340))
+            return False
+        if self._live_preview_visible:
+            GLib.idle_add(_set_paned_pos)
+
         # CSS for compiled-preview page cards (white background + shadow,
         # so pages look correct regardless of whether GTK theme is dark or light)
         css = Gtk.CssProvider()
@@ -431,6 +468,69 @@ class GostWindow(Adw.ApplicationWindow):
             css,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
+
+    # ------------------------------------------------------------------
+    # Live preview pane
+    # ------------------------------------------------------------------
+
+    def _build_live_preview_pane(self) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.set_size_request(300, -1)
+
+        sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        sep.set_hexpand(False)
+
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        inner.set_hexpand(True)
+
+        hdr = Gtk.Box(spacing=6)
+        hdr.set_margin_start(10); hdr.set_margin_end(8)
+        hdr.set_margin_top(6);    hdr.set_margin_bottom(6)
+        lbl = Gtk.Label(label="Live Preview")
+        lbl.add_css_class("heading")
+        lbl.set_hexpand(True)
+        lbl.set_xalign(0)
+        self._live_spinner = Gtk.Spinner()
+        self._live_status = Gtk.Label(label="")
+        self._live_status.add_css_class("caption")
+        self._live_status.add_css_class("dim-label")
+        hdr.append(lbl)
+        hdr.append(self._live_spinner)
+        hdr.append(self._live_status)
+        inner.append(hdr)
+        inner.append(Gtk.Separator())
+
+        scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        self._pages_box_live = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self._pages_box_live.set_margin_top(10); self._pages_box_live.set_margin_bottom(10)
+        self._pages_box_live.set_margin_start(8); self._pages_box_live.set_margin_end(8)
+        scroll.set_child(self._pages_box_live)
+        inner.append(scroll)
+
+        h = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        h.append(sep)
+        h.append(inner)
+        box.append(h)
+
+        box.set_visible(self._live_preview_visible)
+        return box
+
+    def _on_live_preview_toggled(self, btn):
+        self._live_preview_visible = btn.get_active()
+        self._config.set("live_preview_visible", self._live_preview_visible)
+        self._live_pane.set_visible(self._live_preview_visible)
+        if self._live_preview_visible and self._preview_btn.get_sensitive():
+            self._schedule_live_compile(400)
+
+    def _initial_live_compile(self):
+        if self._preview_btn.get_sensitive():
+            self._compile_preview()
+        return GLib.SOURCE_REMOVE
+
+    def _schedule_live_compile(self, delay_ms: int = 400):
+        if self._live_preview_timeout is not None:
+            GLib.source_remove(self._live_preview_timeout)
+        self._live_preview_timeout = GLib.timeout_add(delay_ms, self._debounced_compile)
 
     # ------------------------------------------------------------------
     # Hamburger menu popover
@@ -659,8 +759,12 @@ class GostWindow(Adw.ApplicationWindow):
         for key, sw in self._lang_switches.items():
             sw.set_active(key in s.get("languages", []))
 
-        # Chapters
-        self._chapters = list(s.get("chapters", []))
+        # Chapters — migrate old list-of-strings format to list-of-dicts
+        raw = s.get("chapters", [])
+        self._chapters = [
+            c if isinstance(c, dict) else {"title": c, "notes": ""}
+            for c in raw
+        ]
         if hasattr(self, "_chapters_list_box"):
             self._rebuild_chapters_ui()
 
@@ -1295,11 +1399,18 @@ class GostWindow(Adw.ApplicationWindow):
         self._prev_mode_btns["source"].set_active(True)
         toolbar.append(mode_box)
 
-        refresh_btn = Gtk.Button(label="Refresh")
+        refresh_btn = Gtk.Button(label="Regenerate")
         refresh_btn.add_css_class("flat")
-        refresh_btn.set_tooltip_text("Regenerate the source preview from current settings")
+        refresh_btn.set_tooltip_text("Regenerate source from current settings, discarding manual edits")
         refresh_btn.connect("clicked", lambda *_: self._refresh_source())
         toolbar.append(refresh_btn)
+
+        self._src_edited_lbl = Gtk.Label(label="● Edited")
+        self._src_edited_lbl.add_css_class("caption")
+        self._src_edited_lbl.add_css_class("warning")
+        self._src_edited_lbl.set_tooltip_text("Source has been manually edited — click Regenerate to reset")
+        self._src_edited_lbl.set_visible(False)
+        toolbar.append(self._src_edited_lbl)
 
         self._compile_spinner = Gtk.Spinner()
         toolbar.append(self._compile_spinner)
@@ -1324,11 +1435,12 @@ class GostWindow(Adw.ApplicationWindow):
         self._preview_inner_stack.set_vexpand(True)
         self._preview_inner_stack.set_transition_type(Gtk.StackTransitionType.NONE)
 
-        # Source view
+        # Source view — editable; changes are used for compilation
         src_scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
         self._preview_buf = Gtk.TextBuffer()
+        self._preview_buf.connect("changed", self._on_source_buf_changed)
         self._preview_view = Gtk.TextView(buffer=self._preview_buf)
-        self._preview_view.set_editable(False)
+        self._preview_view.set_editable(True)
         self._preview_view.set_monospace(True)
         self._preview_view.set_left_margin(14)
         self._preview_view.set_top_margin(10)
@@ -1388,24 +1500,42 @@ class GostWindow(Adw.ApplicationWindow):
     # Source preview
     # ------------------------------------------------------------------
 
+    def _on_source_buf_changed(self, buf):
+        if self._updating_source_buf:
+            return
+        self._source_manually_edited = True
+        if hasattr(self, "_src_edited_lbl"):
+            self._src_edited_lbl.set_visible(True)
+        if self._preview_btn.get_sensitive():
+            self._schedule_live_compile(600)
+
     def _refresh_source(self):
         content = self._build_template()
+        self._updating_source_buf = True
         self._preview_buf.set_text(content)
+        self._updating_source_buf = False
         self._preview_dirty = False
+        self._source_manually_edited = False
+        if hasattr(self, "_src_edited_lbl"):
+            self._src_edited_lbl.set_visible(False)
 
     def _dirty_preview(self):
         self._preview_dirty = True
         current_panel = self._content_stack.get_visible_child_name()
-        if current_panel != "preview":
-            return
-        mode = "compiled" if self._prev_mode_btns.get("compiled", Gtk.ToggleButton()).get_active() else "source"
-        if mode == "source":
-            self._refresh_source()
-        elif mode == "compiled" and self._preview_btn.get_sensitive():
-            # Cancel any pending debounce and start a fresh 600 ms timer
-            if self._live_preview_timeout is not None:
-                GLib.source_remove(self._live_preview_timeout)
-            self._live_preview_timeout = GLib.timeout_add(600, self._debounced_compile)
+
+        if current_panel == "preview":
+            mode = "compiled" if self._prev_mode_btns.get("compiled", Gtk.ToggleButton()).get_active() else "source"
+            if mode == "source":
+                self._refresh_source()
+
+        if self._preview_btn.get_sensitive():
+            should_compile = (
+                self._live_preview_visible or
+                (current_panel == "preview" and
+                 self._prev_mode_btns.get("compiled", Gtk.ToggleButton()).get_active())
+            )
+            if should_compile:
+                self._schedule_live_compile(400)
 
     # ------------------------------------------------------------------
     # Compiler dependency check
@@ -1457,13 +1587,22 @@ class GostWindow(Adw.ApplicationWindow):
     # Compiled preview
     # ------------------------------------------------------------------
 
+    def _build_template_for_compile(self) -> str:
+        if self._source_manually_edited:
+            buf = self._preview_buf
+            return buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+        return self._build_template()
+
     def _compile_preview(self):
         if self._compiling:
             return
         self._compiling = True
         self._compile_spinner.start()
         self._compile_status.set_text("Compiling…")
-        source = self._build_template()
+        if hasattr(self, "_live_spinner"):
+            self._live_spinner.start()
+            self._live_status.set_text("…")
+        source = self._build_template_for_compile()
         fmt = self._format
         engine = self._engine
         t = threading.Thread(
@@ -1481,38 +1620,49 @@ class GostWindow(Adw.ApplicationWindow):
             pages, err = compile_latex(source, engine)
         GLib.idle_add(self._compile_done, pages, err)
 
-    def _compile_done(self, pages: list, err: str):
-        self._compiling = False
-        self._compile_spinner.stop()
-
-        # Clear previous pages
-        child = self._pages_box.get_first_child()
+    def _clear_box(self, box: Gtk.Box):
+        child = box.get_first_child()
         while child:
             nxt = child.get_next_sibling()
-            self._pages_box.remove(child)
+            box.remove(child)
             child = nxt
 
+    def _populate_pages_box(self, box: Gtk.Box, pages: list, err: str):
+        self._clear_box(box)
         if err:
-            self._compile_status.set_text(f"Error — see below")
             lbl = Gtk.Label(label=err, wrap=True, xalign=0.0)
             lbl.set_selectable(True)
             lbl.add_css_class("monospace")
-            self._pages_box.append(lbl)
+            box.append(lbl)
         else:
-            self._compile_status.set_text(f"{len(pages)} page(s)")
             for png_bytes in pages:
                 try:
                     texture = _png_bytes_to_texture(png_bytes)
                     pic = Gtk.Picture.new_for_paintable(texture)
                     pic.set_content_fit(Gtk.ContentFit.CONTAIN)
                     pic.set_hexpand(True)
-                    # Wrap in a white card so pages look correct on dark themes
                     card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
                     card.add_css_class("preview-page-card")
                     card.append(pic)
-                    self._pages_box.append(card)
+                    box.append(card)
                 except Exception as e:
-                    self._pages_box.append(Gtk.Label(label=f"Image error: {e}"))
+                    box.append(Gtk.Label(label=f"Image error: {e}"))
+
+    def _compile_done(self, pages: list, err: str):
+        self._compiling = False
+        self._compile_spinner.stop()
+        if hasattr(self, "_live_spinner"):
+            self._live_spinner.stop()
+            self._live_status.set_text(f"{len(pages)}p" if not err else "Error")
+
+        if err:
+            self._compile_status.set_text("Error — see below")
+        else:
+            self._compile_status.set_text(f"{len(pages)} page(s)")
+
+        self._populate_pages_box(self._pages_box, pages, err)
+        if hasattr(self, "_pages_box_live"):
+            self._populate_pages_box(self._pages_box_live, pages, err)
 
         return GLib.SOURCE_REMOVE
 
@@ -1630,7 +1780,7 @@ class GostWindow(Adw.ApplicationWindow):
             "languages":      [k for k, sw in self._lang_switches.items() if sw.get_active()],
             "format": self._format,
 
-            "chapters": list(self._chapters),
+            "chapters": [{"title": c.get("title", ""), "notes": c.get("notes", "")} for c in self._chapters],
 
             "custom_latex_preamble": (
                 self._r_custom_latex.get_buffer().get_text(
@@ -1853,17 +2003,17 @@ class GostWindow(Adw.ApplicationWindow):
         about.set_website("https://github.com/calstfrancis/gost")
         about.set_issue_url("https://github.com/calstfrancis/gost/issues")
         about.set_release_notes(
-            "<p>Version 0.1.7</p>"
+            "<p>Version 0.1.8</p>"
             "<ul>"
-            "<li>Simple mode toggle moved to the header bar — always visible</li>"
-            "<li>pipx desktop integration runs automatically on first launch</li>"
+            "<li>Live auto-preview pane — recompiles as you type, always visible</li>"
+            "<li>Editable source view — edit the generated code directly</li>"
+            "<li>Chapter reordering with up/down buttons</li>"
+            "<li>Per-chapter notes field</li>"
+            "<li>Simple mode toggle in header bar</li>"
             "<li>Word / ODT export</li>"
             "<li>ASA, Turabian, and Harvard citation styles</li>"
-            "<li>Compiled PDF preview (Typst and LaTeX)</li>"
             "<li>Journal LaTeX template importer</li>"
-            "<li>Running headers and footers panel</li>"
             "<li>Template profiles (save/load/delete)</li>"
-            "<li>Language support: Russian, Hebrew, Japanese, Tibetan, Sanskrit, Greek, Chinese</li>"
             "</ul>"
         )
         about.present()
@@ -2051,7 +2201,7 @@ class GostWindow(Adw.ApplicationWindow):
         add_btn.add_css_class("pill")
         add_btn.set_halign(Gtk.Align.START)
         add_btn.set_tooltip_text("Add a new chapter entry to the list")
-        add_btn.connect("clicked", lambda *_: self._add_chapter())
+        add_btn.connect("clicked", lambda *_: self._add_chapter()  )
         outer.append(add_btn)
 
         folder_btn = Gtk.Button(label="Export as Project Folder…")
@@ -2074,51 +2224,112 @@ class GostWindow(Adw.ApplicationWindow):
             nxt = child.get_next_sibling()
             lb.remove(child)
             child = nxt
-        for title in self._chapters:
-            self._add_chapter_row(title)
+        for ch in self._chapters:
+            self._add_chapter_row(ch)
 
-    def _add_chapter(self, title: str = ""):
-        self._chapters.append(title)
-        self._add_chapter_row(title)
+    def _add_chapter(self):
+        entry = {"title": "", "notes": ""}
+        self._chapters.append(entry)
+        self._add_chapter_row(entry)
         self._dirty_preview()
 
-    def _add_chapter_row(self, title: str):
-        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    def _add_chapter_row(self, ch: dict):
+        idx = self._chapters.index(ch)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        # ── Main row ──
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         row_box.set_margin_start(6); row_box.set_margin_end(6)
-        row_box.set_margin_top(4); row_box.set_margin_bottom(4)
+        row_box.set_margin_top(4);   row_box.set_margin_bottom(2)
 
-        entry = Gtk.Entry()
-        entry.set_text(title)
-        entry.set_hexpand(True)
-        entry.set_placeholder_text("Chapter title")
+        # Up / Down reorder
+        up_btn = Gtk.Button()
+        up_btn.set_icon_name("go-up-symbolic")
+        up_btn.add_css_class("flat"); up_btn.add_css_class("circular")
+        up_btn.set_tooltip_text("Move chapter up")
 
-        def _on_title_changed(e, idx=len(self._chapters) - 1):
-            if idx < len(self._chapters):
-                self._chapters[idx] = e.get_text()
-            self._dirty_preview()
-        entry.connect("changed", _on_title_changed)
+        dn_btn = Gtk.Button()
+        dn_btn.set_icon_name("go-down-symbolic")
+        dn_btn.add_css_class("flat"); dn_btn.add_css_class("circular")
+        dn_btn.set_tooltip_text("Move chapter down")
+
+        title_entry = Gtk.Entry()
+        title_entry.set_text(ch.get("title", ""))
+        title_entry.set_hexpand(True)
+        title_entry.set_placeholder_text("Chapter title")
+
+        notes_btn = Gtk.ToggleButton()
+        notes_btn.set_icon_name("text-editor-symbolic")
+        notes_btn.add_css_class("flat"); notes_btn.add_css_class("circular")
+        notes_btn.set_tooltip_text("Show / hide chapter notes")
 
         del_btn = Gtk.Button()
         del_btn.set_icon_name("list-remove-symbolic")
-        del_btn.add_css_class("flat")
-        del_btn.add_css_class("circular")
+        del_btn.add_css_class("flat"); del_btn.add_css_class("circular")
+        del_btn.set_tooltip_text("Remove this chapter")
 
-        def _on_remove(_btn, _box=row_box, _entry=entry):
-            text = _entry.get_text()
-            if text in self._chapters:
-                self._chapters.remove(text)
-            elif "" in self._chapters:
-                self._chapters.remove("")
-            self._chapters_list_box.remove(_box.get_parent() or _box)
-            self._dirty_preview()
-        del_btn.connect("clicked", _on_remove)
-
-        row_box.append(entry)
+        row_box.append(up_btn)
+        row_box.append(dn_btn)
+        row_box.append(title_entry)
+        row_box.append(notes_btn)
         row_box.append(del_btn)
 
+        # ── Notes row (collapsible) ──
+        notes_rev = Gtk.Revealer()
+        notes_rev.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        notes_rev.set_reveal_child(False)
+
+        notes_entry = Gtk.Entry()
+        notes_entry.set_text(ch.get("notes", ""))
+        notes_entry.set_placeholder_text("Optional notes for this chapter…")
+        notes_entry.set_margin_start(6); notes_entry.set_margin_end(6)
+        notes_entry.set_margin_bottom(4)
+        notes_rev.set_child(notes_entry)
+
+        outer.append(row_box)
+        outer.append(notes_rev)
+
         list_row = Gtk.ListBoxRow()
-        list_row.set_child(row_box)
+        list_row.set_child(outer)
         self._chapters_list_box.append(list_row)
+
+        # ── Callbacks (capture ch by reference) ──
+        def _title_changed(e):
+            ch["title"] = e.get_text()
+            self._dirty_preview()
+        title_entry.connect("changed", _title_changed)
+
+        def _notes_changed(e):
+            ch["notes"] = e.get_text()
+        notes_entry.connect("changed", _notes_changed)
+
+        def _toggle_notes(btn):
+            notes_rev.set_reveal_child(btn.get_active())
+        notes_btn.connect("toggled", _toggle_notes)
+
+        def _move_up(_b):
+            i = self._chapters.index(ch)
+            if i > 0:
+                self._chapters[i], self._chapters[i - 1] = self._chapters[i - 1], self._chapters[i]
+                self._rebuild_chapters_ui()
+                self._dirty_preview()
+        up_btn.connect("clicked", _move_up)
+
+        def _move_down(_b):
+            i = self._chapters.index(ch)
+            if i < len(self._chapters) - 1:
+                self._chapters[i], self._chapters[i + 1] = self._chapters[i + 1], self._chapters[i]
+                self._rebuild_chapters_ui()
+                self._dirty_preview()
+        dn_btn.connect("clicked", _move_down)
+
+        def _remove(_b):
+            if ch in self._chapters:
+                self._chapters.remove(ch)
+            self._rebuild_chapters_ui()
+            self._dirty_preview()
+        del_btn.connect("clicked", _remove)
 
     def _on_export_folder(self, _btn):
         if not self._chapters:
@@ -2157,14 +2368,15 @@ class GostWindow(Adw.ApplicationWindow):
 
             cite_cmd = state.get("cite_cmd", "autocite")
             for i, ch in enumerate(self._chapters, 1):
-                slug = _chapter_slug(ch, i)
+                ch_title = ch["title"] if isinstance(ch, dict) else ch
+                slug = _chapter_slug(ch_title, i)
                 ch_path = os.path.join(folder, slug + ext)
                 if is_typst:
                     from essay_builder.typstgen import generate_chapter_file as gcf
-                    ch_src = gcf(ch)
+                    ch_src = gcf(ch_title)
                 else:
                     from essay_builder.texgen import generate_chapter_file as gcf
-                    ch_src = gcf(ch, cite_cmd)
+                    ch_src = gcf(ch_title, cite_cmd)
                 with open(ch_path, "w", encoding="utf-8") as f:
                     f.write(ch_src)
 

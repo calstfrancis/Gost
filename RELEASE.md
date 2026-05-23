@@ -1,4 +1,4 @@
-# Gost v0.1.7
+# Gost v0.1.8
 
 **Released:** 2026-05-23
 
@@ -6,11 +6,11 @@
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.7-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
+| `gost-0.1.8-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
 
 ```bash
-chmod +x gost-0.1.7-x86_64.AppImage
-./gost-0.1.7-x86_64.AppImage
+chmod +x gost-0.1.8-x86_64.AppImage
+./gost-0.1.8-x86_64.AppImage
 ```
 
 Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
@@ -43,9 +43,25 @@ gost
 
 ---
 
-## What's New in v0.1.7
+## What's New in v0.1.8
 
-### Simple mode in the header bar
+### Live auto-preview pane
+
+A **Live Preview** pane is now always visible on the right side of the app, separated from the settings by a draggable divider. It compiles automatically as you change settings (400 ms debounce) and shows the rendered PDF pages without requiring a manual Preview click. Toggle it on/off with the column-view button in the header bar; the preference is remembered between sessions.
+
+### Editable source view
+
+The **Source** tab in the Preview panel is now editable. Make changes directly to the generated code — they are used for compilation immediately (with a 600 ms debounce). A **● Edited** badge appears when the buffer has been modified. Click **Regenerate** to reset back to the auto-generated output from current settings.
+
+### Enhanced chapter management
+
+The **Chapters** panel now supports:
+- **Reordering** — up/down arrow buttons move any chapter in the list
+- **Per-chapter notes** — a collapsible notes field on each row (tap the notes icon to expand)
+
+Chapter data is stored as structured objects (`title` + `notes`); the format is backwards-compatible with older saved profiles.
+
+### Simple mode in the header bar (since v0.1.7)
 
 The **Simple** toggle is now permanently visible in the top panel of the app, next to the format buttons — no more hunting through the hamburger menu.
 

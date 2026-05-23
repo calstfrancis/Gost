@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.8] – 2026-05-23
+
+### Added
+- **Live auto-preview pane** — always-visible right panel that recompiles and renders the template automatically on any settings change (400 ms debounce). Toggled by a column-view button in the header bar; preference saved between sessions.
+- **Editable source view** — the Source tab in the Preview panel is now editable. Manual edits are used directly for compilation. A "● Edited" badge indicates the buffer has diverged from the auto-generated source; click "Regenerate" to reset.
+- **Chapter reordering** — up/down arrow buttons on each chapter row; no drag-and-drop required.
+- **Per-chapter notes** — a collapsible notes field on each chapter row, revealed by a notes icon button.
+
+### Changed
+- Chapter data structure upgraded from `list[str]` to `list[dict(title, notes)]`; old profiles are migrated automatically on load.
+- Preview "Refresh" button renamed to "Regenerate" to clarify it resets manual edits.
+- `_compile_done()` now populates both the full preview panel and the live pane from a single compilation result.
+
+---
+
 ## [0.1.7] – 2026-05-23
 
 ### Added

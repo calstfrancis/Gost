@@ -14,6 +14,20 @@
 
 ---
 
+## Live preview
+
+The **Live Preview** pane on the right side of the window recompiles the template automatically as you change settings (400 ms debounce). It requires `typst` or `latexmk` to be installed, just like the manual Preview button. Toggle it with the column-view icon in the header bar; the preference is remembered.
+
+If the compiler is not installed, the live pane stays empty and shows no error — install the compiler and restart.
+
+---
+
+## Editable source
+
+In the **Preview** → **Source** tab, the code is editable. Changes you make are used directly for the next compilation (manual or auto). When you have edited the source, a **● Edited** badge appears in the toolbar. Click **Regenerate** to discard edits and regenerate from the current settings.
+
+---
+
 ## Format: Typst, LaTeX, or Word
 
 Toggle between Typst, LaTeX, and Word using the buttons in the header bar. The active format is used for all previews and exports. Switching format hides settings that don't apply (e.g., LaTeX engines are hidden in Typst and Word modes).
@@ -98,6 +112,17 @@ Click **Import .tex** in the header bar and pick a `.tex`, `.cls`, or `.sty` fil
 - `\addbibresource{…}`
 
 Detected settings are merged into the current configuration. A toast notification lists what was imported.
+
+---
+
+## Chapters and project mode
+
+The **Chapters** panel (visible when Simple mode is off) lets you build a multi-chapter project:
+
+- **Add Chapter** — adds a new chapter entry.
+- **Reorder** — use the ↑ ↓ arrow buttons to move any chapter up or down.
+- **Notes** — tap the notes icon on a chapter row to reveal a notes field (for your own reference; not included in the exported template).
+- **Export as Project Folder** — writes `main.typ` (or `main.tex`) plus one file per chapter into a folder you choose.
 
 ---
 

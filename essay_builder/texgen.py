@@ -578,7 +578,8 @@ def generate(s: Dict[str, Any]) -> str:
         L.append(r"\tableofcontents")
         L.append(r"\newpage")
 
-    chapters = s.get("chapters", [])
+    raw_chapters = s.get("chapters", [])
+    chapters = [c["title"] if isinstance(c, dict) else c for c in raw_chapters]
     multifile = s.get("multifile", False)
 
     L.append("")
