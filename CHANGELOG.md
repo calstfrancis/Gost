@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.10] – 2026-06-06
+
+### Added
+- GitHub Actions release workflow — publishing a GitHub Release now automatically builds `gost_*.deb` (Debian/Ubuntu) and `gost-*.noarch.rpm` (Fedora/openSUSE) and attaches them to the release assets.
+
+### Removed
+- AppImage distribution dropped in favour of native RPM and DEB packages.
+
+---
+
 ## [0.1.9] – 2026-06-06
 
 ### Added

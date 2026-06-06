@@ -56,16 +56,16 @@ gost
 ### RPM (Fedora / openSUSE / RHEL)
 ```bash
 # Download from GitHub Releases, then:
-sudo zypper in ./gost-0.1.9-1.noarch.rpm   # openSUSE
-sudo dnf install ./gost-0.1.9-1.noarch.rpm  # Fedora / RHEL
-sudo rpm -i gost-0.1.9-1.noarch.rpm         # any RPM-based distro
+sudo zypper in ./gost-0.1.10-1.noarch.rpm   # openSUSE
+sudo dnf install ./gost-0.1.10-1.noarch.rpm  # Fedora / RHEL
+sudo rpm -i gost-0.1.10-1.noarch.rpm         # any RPM-based distro
 ```
 
 ### DEB (Debian / Ubuntu / Mint)
 ```bash
 # Download from GitHub Releases, then:
-sudo apt install ./gost_0.1.9_all.deb
-# or: sudo dpkg -i gost_0.1.9_all.deb && sudo apt-get install -f
+sudo apt install ./gost_0.1.10_all.deb
+# or: sudo dpkg -i gost_0.1.10_all.deb && sudo apt-get install -f
 ```
 
 ### From source
@@ -77,8 +77,8 @@ python3 -m essay_builder.app
 
 ### Build your own RPM / DEB
 ```bash
-bash build-rpm.sh   # produces gost-0.1.9-1.noarch.rpm  (requires rpmbuild)
-bash build-deb.sh   # produces gost_0.1.9_all.deb       (requires dpkg-deb; run on Debian/Ubuntu)
+bash build-rpm.sh   # produces gost-0.1.10-1.noarch.rpm  (requires rpmbuild)
+bash build-deb.sh   # produces gost_0.1.10_all.deb       (requires dpkg-deb; run on Debian/Ubuntu)
 ```
 
 ## Usage

@@ -1,5 +1,5 @@
 Name:           gost
-Version:        0.1.9
+Version:        0.1.10
 Release:        1%{?dist}
 Summary:        Academic essay templater for LaTeX and Typst
 
@@ -86,6 +86,10 @@ gtk-update-icon-cache -f -t %{_datadir}/icons/hicolor &>/dev/null || true
 update-desktop-database -q %{_datadir}/applications &>/dev/null || true
 
 %changelog
+* Sat Jun 06 2026 Cal St Francis <calstfrancis@gmail.com> - 0.1.10-1
+- GitHub Actions release workflow builds DEB and RPM automatically on publish
+- AppImage distribution dropped in favour of native packages
+
 * Sat Jun 06 2026 Cal St Francis <calstfrancis@gmail.com> - 0.1.9-1
 - RPM and DEB packaging
 - Updated documentation with distribution-specific install instructions
