@@ -1,21 +1,52 @@
-# Gost v0.1.8
+# Gost v0.1.9
 
-**Released:** 2026-05-23
+**Released:** 2026-06-06
 
 ## Download
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.8-x86_64.AppImage` | Linux x86_64 (GTK4 + libadwaita required) |
+| `gost-0.1.9-1.noarch.rpm` | Fedora, openSUSE, RHEL, and RPM-based distros |
+| `gost_0.1.9_all.deb` | Debian, Ubuntu, Linux Mint, and DEB-based distros |
+| `gost-0.1.9-x86_64.AppImage` | Any Linux x86_64 (GTK4 + libadwaita required) |
+
+---
+
+## Installation
+
+### RPM (Fedora / openSUSE / RHEL)
 
 ```bash
-chmod +x gost-0.1.8-x86_64.AppImage
-./gost-0.1.8-x86_64.AppImage
+# Install system dependencies first (if not already present):
+sudo zypper install python3-gobject typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1  # openSUSE
+sudo dnf install python3-gobject gtk4 libadwaita                             # Fedora
+
+# Install Gost:
+sudo zypper in ./gost-0.1.9-1.noarch.rpm   # openSUSE
+sudo dnf install ./gost-0.1.9-1.noarch.rpm  # Fedora / RHEL
+```
+
+### DEB (Debian / Ubuntu / Mint)
+
+```bash
+# Install system dependencies first:
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+
+# Install Gost:
+sudo apt install ./gost_0.1.9_all.deb
+# or: sudo dpkg -i gost_0.1.9_all.deb && sudo apt-get install -f
+```
+
+### AppImage
+
+```bash
+chmod +x gost-0.1.9-x86_64.AppImage
+./gost-0.1.9-x86_64.AppImage
 ```
 
 Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
 
-### pipx (recommended)
+### pipx (recommended for source installs)
 
 ```bash
 # 1. Install system dependencies (once)
@@ -31,78 +62,46 @@ pipx install 'gost-academic[word]' --system-site-packages  # + Word / ODT export
 gost
 ```
 
-> `--system-site-packages` is required so pipx can access the system-installed PyGObject and GTK4 typelibs, which cannot be installed via pip. Desktop integration (`.desktop` file and icons) is set up automatically on first launch.
+---
 
-### pip
+## What's New in v0.1.9
+
+### RPM and DEB packages
+
+Gost is now distributed as native Linux packages:
+
+- **RPM** (`gost-0.1.9-1.noarch.rpm`) — for Fedora, openSUSE, RHEL, and any RPM-based distribution. Installs Gost, its launcher, desktop entry, icons, and fonts into the standard system directories. Dependencies are declared in the package so your distro's package manager handles them automatically.
+- **DEB** (`gost_0.1.9_all.deb`) — for Debian, Ubuntu, Linux Mint, and any DEB-based distribution. Same set of installed files; `apt install` resolves dependencies automatically.
+
+Both packages:
+- Place the launcher at `/usr/bin/gost`
+- Register a `.desktop` entry so Gost appears in the GNOME application launcher
+- Install the GOST Type B font to `/usr/share/fonts/gost/`
+- Run post-install hooks to refresh the icon cache and desktop database
+
+Build your own packages from source:
 
 ```bash
-pip install gost-academic
-pip install 'gost-academic[word]'  # + Word / ODT export
-gost
+bash build-rpm.sh   # requires rpmbuild (rpm-build package)
+bash build-deb.sh   # requires dpkg-deb; run on a Debian/Ubuntu host
 ```
 
 ---
 
-## What's New in v0.1.8
+## Previous release — v0.1.8
 
 ### Live auto-preview pane
 
-A **Live Preview** pane is now always visible on the right side of the app, separated from the settings by a draggable divider. It compiles automatically as you change settings (400 ms debounce) and shows the rendered PDF pages without requiring a manual Preview click. Toggle it on/off with the column-view button in the header bar; the preference is remembered between sessions.
+A **Live Preview** pane is now always visible on the right side of the app. It compiles automatically as you change settings (400 ms debounce). Toggle with the column-view button in the header bar; preference is remembered between sessions.
 
 ### Editable source view
 
-The **Source** tab in the Preview panel is now editable. Make changes directly to the generated code — they are used for compilation immediately (with a 600 ms debounce). A **● Edited** badge appears when the buffer has been modified. Click **Regenerate** to reset back to the auto-generated output from current settings.
+The **Source** tab in the Preview panel is now editable. A **● Edited** badge appears when the buffer has been modified. Click **Regenerate** to reset.
 
 ### Enhanced chapter management
 
-The **Chapters** panel now supports:
-- **Reordering** — up/down arrow buttons move any chapter in the list
-- **Per-chapter notes** — a collapsible notes field on each row (tap the notes icon to expand)
-
-Chapter data is stored as structured objects (`title` + `notes`); the format is backwards-compatible with older saved profiles.
-
-### Simple mode in the header bar (since v0.1.7)
-
-The **Simple** toggle is now permanently visible in the top panel of the app, next to the format buttons — no more hunting through the hamburger menu.
-
-### About dialog
-
-The author name in **Credits** now links to <https://calstfrancis.github.io>. The version string also reflects the actual installed package version.
-
-### pipx desktop integration (since v0.1.6.1)
-
-Running `gost` via pipx previously required finding the binary manually, and Gost did not appear in the GNOME application launcher. On first launch, Gost now automatically installs its `.desktop` file and application icons into your local user directories — no extra step required.
-
-This places `~/.local/share/applications/ca.calstfrancis.Gost.desktop` and the SVG icons under `~/.local/share/icons/hicolor/`, then refreshes the icon cache and desktop database. A `gost-setup-desktop` command is also available if you ever need to reinstall the integration manually.
-
-### pipx `--system-site-packages` now documented
-
-The `ModuleNotFoundError: No module named 'gi'` error that pipx users encountered is caused by pipx's isolated virtual environment not having access to the system-installed PyGObject. The fix — `pipx install gost-academic --system-site-packages` — is now prominently documented in the install steps above and in HELP.md.
-
----
-
-## Previous release — v0.1.5
-
-### Word and ODT export
-
-A new **Word** button sits alongside Typst and LaTeX in the header bar. Clicking Export with Word selected saves a fully styled `.docx` template:
-
-- Correct margins, font, double spacing, and heading styles for all seven citation styles
-- Centered or left-aligned title block following MLA, APA, Chicago, SBL, ASA, Turabian, or Harvard conventions
-- Abstract placeholder (APA and ASA get a separate abstract page)
-- Bibliography / Works Cited / References section with hanging-indent sample entry and a Zotero Word plug-in tip
-- **ODT** — if LibreOffice is installed, choose `.odt` in the save dialog and it is converted automatically
-
-Word export requires `python-docx`. It is bundled in the AppImage. For source installs: `pip install gost-academic[word]`.
-
-### PyPI
-
-Gost is now available on PyPI as `gost-academic`:
-
-```bash
-pip install gost-academic
-pip install gost-academic[word]   # includes python-docx for Word export
-```
+- **Reordering** — up/down arrow buttons on each chapter row
+- **Per-chapter notes** — collapsible notes field on each row
 
 ---
 
@@ -111,17 +110,15 @@ pip install gost-academic[word]   # includes python-docx for Word export
 | Requirement | Notes |
 |---|---|
 | Python 3.10+ | |
-| PyGObject | `python3-gobject` on openSUSE |
-| GTK4 typelib | `typelib-1_0-Gtk-4_0` |
-| libadwaita ≥ 1.4 | `typelib-1_0-Adw-1` |
+| PyGObject | `python3-gobject` / `python3-gi` |
+| GTK4 typelib | `typelib-1_0-Gtk-4_0` / `gir1.2-gtk-4.0` |
+| libadwaita ≥ 1.4 | `typelib-1_0-Adw-1` / `gir1.2-adw-1` |
 
 **Compiled preview (optional):** `typst` for Typst output; `latexmk` + `poppler-tools` for LaTeX.
 
-**Word export (optional):** `python-docx` (`pip install gost-academic[word]`). Bundled in the AppImage.
+**Word export (optional):** `python-docx`. Bundled in the AppImage; `pip install gost-academic[word]` for source installs.
 
-**ODT export (optional):** LibreOffice (`libreoffice` or `soffice` in PATH).
-
-**ASA style (optional):** requires the `biblatex-asa` LaTeX package (`tlmgr install biblatex-asa`).
+**ODT export (optional):** LibreOffice.
 
 ---
 
@@ -132,6 +129,8 @@ git clone https://github.com/calstfrancis/gost
 cd gost
 python3 -m essay_builder.app          # run directly
 bash build-appimage.sh                # build AppImage
+bash build-rpm.sh                     # build RPM (requires rpmbuild)
+bash build-deb.sh                     # build DEB (requires dpkg-deb)
 ```
 
 ---

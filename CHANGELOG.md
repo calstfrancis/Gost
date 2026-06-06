@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.9] – 2026-06-06
+
+### Added
+- **RPM package** (`gost-0.1.9-1.noarch.rpm`) — install on Fedora, openSUSE, RHEL, and derivatives via `sudo zypper in ./gost-*.rpm` or `sudo rpm -i gost-*.rpm`. Build from source with `bash build-rpm.sh`.
+- **DEB package** (`gost_0.1.9_all.deb`) — install on Debian, Ubuntu, Mint, and derivatives via `sudo apt install ./gost_*.deb`. Build from source with `bash build-deb.sh` on a Debian-based host.
+- `packaging/gost.spec` — RPM spec file for distribution packaging.
+- `build-rpm.sh` / `build-deb.sh` — reproducible build scripts for both package formats.
+
+### Changed
+- README updated with RPM and DEB installation instructions and per-distribution package manager commands.
+
+---
+
 ## [0.1.8] – 2026-05-23
 
 ### Added

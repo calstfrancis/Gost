@@ -53,10 +53,25 @@ gost
 > Desktop integration runs automatically on first launch.
 > See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
 
+### RPM (Fedora / openSUSE / RHEL)
+```bash
+# Download from GitHub Releases, then:
+sudo zypper in ./gost-0.1.9-1.noarch.rpm   # openSUSE
+sudo dnf install ./gost-0.1.9-1.noarch.rpm  # Fedora / RHEL
+sudo rpm -i gost-0.1.9-1.noarch.rpm         # any RPM-based distro
+```
+
+### DEB (Debian / Ubuntu / Mint)
+```bash
+# Download from GitHub Releases, then:
+sudo apt install ./gost_0.1.9_all.deb
+# or: sudo dpkg -i gost_0.1.9_all.deb && sudo apt-get install -f
+```
+
 ### AppImage
 ```bash
-chmod +x gost-0.1.8-x86_64.AppImage
-./gost-0.1.8-x86_64.AppImage
+chmod +x gost-0.1.9-x86_64.AppImage
+./gost-0.1.9-x86_64.AppImage
 # Or install via Gear Lever for desktop integration
 ```
 
@@ -67,10 +82,11 @@ cd gost
 python3 -m essay_builder.app
 ```
 
-### Build your own AppImage
+### Build your own AppImage / RPM / DEB
 ```bash
-bash build-appimage.sh
-# Produces gost-0.1.8-x86_64.AppImage in the current directory
+bash build-appimage.sh   # produces gost-0.1.9-x86_64.AppImage
+bash build-rpm.sh        # produces gost-0.1.9-1.noarch.rpm  (requires rpmbuild)
+bash build-deb.sh        # produces gost_0.1.9_all.deb       (requires dpkg-deb; run on Debian/Ubuntu)
 ```
 
 ## Usage
@@ -88,6 +104,8 @@ bash build-appimage.sh
 python3 -m essay_builder.app                    # run directly
 python3 -m unittest discover tests/ -v          # run tests (no GTK needed)
 bash build-appimage.sh                          # build AppImage
+bash build-rpm.sh                               # build RPM (requires rpmbuild)
+bash build-deb.sh                               # build DEB (requires dpkg-deb; Debian/Ubuntu host)
 ```
 
 ## Troubleshooting
