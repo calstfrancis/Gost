@@ -19,7 +19,6 @@
 
 ## System Requirements
 
-### Runtime
 | Dependency | Notes |
 |---|---|
 | Python 3.10+ | |
@@ -27,45 +26,19 @@
 | GTK4 typelib | `typelib-1_0-Gtk-4_0` |
 | libadwaita ≥ 1.4 | `typelib-1_0-Adw-1` |
 
-### Compiled preview (optional)
-| Typst | Install from <https://typst.app> or your package manager |
-|---|---|
-| LaTeX | `texlive-latexmk` + `poppler-tools` (`pdftoppm`) or ImageMagick (`convert`) |
+**Compiled preview (optional):** `typst` or `latexmk` + `poppler-tools`
 
 ## Installation
 
-### pipx (recommended)
-```bash
-pipx install gost-academic --system-site-packages
-pipx install 'gost-academic[word]' --system-site-packages  # + Word/ODT export
-gost
-```
-
-### pip
-```bash
-pip install gost-academic
-pip install 'gost-academic[word]'  # + Word/ODT export
-gost
-```
-
-> **Note:** GTK4 and PyGObject must be installed as system packages first — pip cannot install them.
-> `--system-site-packages` is required with pipx so the isolated environment can access them.
-> Desktop integration runs automatically on first launch.
-> See [HELP.md](HELP.md#troubleshooting) for distribution-specific commands.
-
 ### RPM (Fedora / openSUSE / RHEL)
 ```bash
-# Download from GitHub Releases, then:
 sudo zypper in ./gost-0.1.10-1.noarch.rpm   # openSUSE
 sudo dnf install ./gost-0.1.10-1.noarch.rpm  # Fedora / RHEL
-sudo rpm -i gost-0.1.10-1.noarch.rpm         # any RPM-based distro
 ```
 
 ### DEB (Debian / Ubuntu / Mint)
 ```bash
-# Download from GitHub Releases, then:
 sudo apt install ./gost_0.1.10_all.deb
-# or: sudo dpkg -i gost_0.1.10_all.deb && sudo apt-get install -f
 ```
 
 ### From source
@@ -93,11 +66,10 @@ bash build-deb.sh   # produces gost_0.1.10_all.deb       (requires dpkg-deb; run
 ## Development
 
 ```bash
-python3 -m essay_builder.app                    # run directly
-python3 -m unittest discover tests/ -v          # run tests (no GTK needed)
-bash build-appimage.sh                          # build AppImage
-bash build-rpm.sh                               # build RPM (requires rpmbuild)
-bash build-deb.sh                               # build DEB (requires dpkg-deb; Debian/Ubuntu host)
+python3 -m essay_builder.app                 # run directly
+python3 -m unittest discover tests/ -v       # run tests (no GTK needed)
+bash build-rpm.sh                            # build RPM (requires rpmbuild)
+bash build-deb.sh                            # build DEB (requires dpkg-deb; Debian/Ubuntu host)
 ```
 
 ## Troubleshooting
@@ -108,13 +80,10 @@ Common issues and distribution-specific install commands are in [HELP.md](HELP.m
 |---|---|
 | Preview button greyed out | Install `typst` (Typst) or `latexmk` + `poppler-tools` (LaTeX) |
 | `ImportError: cannot import name 'Adw'` | Install libadwaita typelib — see HELP.md |
-| `ModuleNotFoundError: No module named 'gi'` | Install PyGObject; with pipx reinstall using `--system-site-packages` — see HELP.md |
-| Gost not in application launcher (pipx) | Run `gost-setup-desktop` — see HELP.md |
+| `ModuleNotFoundError: No module named 'gi'` | Install PyGObject — see HELP.md |
 | `gtk-icon-theme-error-quark` warning | Install `adwaita-icon-theme` — see HELP.md |
 
 ## Roadmap
-
-Planned features (contributions welcome):
 
 - [ ] BibLaTeX backend selector (biber / bibtex8)
 - [ ] Custom LaTeX preamble editor (freeform preamble block)
@@ -122,7 +91,6 @@ Planned features (contributions welcome):
 - [ ] CSL citation style support via Pandoc bridge
 - [ ] Dark/light preview theme toggle
 - [ ] CLI mode — `gost generate --style SBL --format typst -o essay.typ`
-- [ ] Flatpak manifest / Flathub submission
 
 ## Contributing
 

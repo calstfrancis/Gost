@@ -7,6 +7,7 @@
 
 ### Removed
 - AppImage distribution dropped in favour of native RPM and DEB packages.
+- PyPI (`gost-academic`) publishing dropped; install via RPM, DEB, or from source.
 
 ---
 
