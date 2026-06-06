@@ -8,7 +8,6 @@ URL:            https://github.com/calstfrancis/gost
 Source0:        https://github.com/calstfrancis/gost/archive/v%{version}/gost-%{version}.tar.gz
 
 BuildArch:      noarch
-BuildRequires:  python3-devel
 
 Requires:       python3 >= 3.10
 Requires:       python3-gobject
