@@ -8,7 +8,6 @@
 |------|----------|
 | `gost-0.1.9-1.noarch.rpm` | Fedora, openSUSE, RHEL, and RPM-based distros |
 | `gost_0.1.9_all.deb` | Debian, Ubuntu, Linux Mint, and DEB-based distros |
-| `gost-0.1.9-x86_64.AppImage` | Any Linux x86_64 (GTK4 + libadwaita required) |
 
 ---
 
@@ -36,15 +35,6 @@ sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
 sudo apt install ./gost_0.1.9_all.deb
 # or: sudo dpkg -i gost_0.1.9_all.deb && sudo apt-get install -f
 ```
-
-### AppImage
-
-```bash
-chmod +x gost-0.1.9-x86_64.AppImage
-./gost-0.1.9-x86_64.AppImage
-```
-
-Or install via [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) for automatic desktop integration.
 
 ### pipx (recommended for source installs)
 
@@ -116,7 +106,7 @@ The **Source** tab in the Preview panel is now editable. A **● Edited** badge 
 
 **Compiled preview (optional):** `typst` for Typst output; `latexmk` + `poppler-tools` for LaTeX.
 
-**Word export (optional):** `python-docx`. Bundled in the AppImage; `pip install gost-academic[word]` for source installs.
+**Word export (optional):** `python-docx`. Install via `pip install gost-academic[word]`.
 
 **ODT export (optional):** LibreOffice.
 
@@ -127,10 +117,9 @@ The **Source** tab in the Preview panel is now editable. A **● Edited** badge 
 ```bash
 git clone https://github.com/calstfrancis/gost
 cd gost
-python3 -m essay_builder.app          # run directly
-bash build-appimage.sh                # build AppImage
-bash build-rpm.sh                     # build RPM (requires rpmbuild)
-bash build-deb.sh                     # build DEB (requires dpkg-deb)
+python3 -m essay_builder.app   # run directly
+bash build-rpm.sh              # build RPM (requires rpmbuild)
+bash build-deb.sh              # build DEB (requires dpkg-deb; run on Debian/Ubuntu)
 ```
 
 ---

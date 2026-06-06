@@ -1,0 +1,73 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-deb:
+    name: Build DEB (Debian/Ubuntu)
+    runs-on: ubuntu-latest
+    outputs:
+      deb-name: ${{ steps.build.outputs.deb-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build DEB
+        id: build
+        run: |
+          bash build-deb.sh
+          DEB=$(ls gost_*.deb | head -1)
+          echo "deb-name=$DEB" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: "*.deb"
+
+  build-rpm:
+    name: Build RPM (Fedora/openSUSE)
+    runs-on: ubuntu-latest
+    outputs:
+      rpm-name: ${{ steps.build.outputs.rpm-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rpmbuild
+        run: sudo apt-get install -y rpm
+
+      - name: Build RPM
+        id: build
+        run: |
+          bash build-rpm.sh
+          RPM=$(ls gost-*.rpm | head -1)
+          echo "rpm-name=$RPM" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: "*.rpm"
+
+  attach:
+    name: Attach packages to release
+    needs: [build-deb, build-rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$TAG" *.deb *.rpm \
+            --repo "${{ github.repository }}" \
+            --clobber

@@ -68,13 +68,6 @@ sudo apt install ./gost_0.1.9_all.deb
 # or: sudo dpkg -i gost_0.1.9_all.deb && sudo apt-get install -f
 ```
 
-### AppImage
-```bash
-chmod +x gost-0.1.9-x86_64.AppImage
-./gost-0.1.9-x86_64.AppImage
-# Or install via Gear Lever for desktop integration
-```
-
 ### From source
 ```bash
 git clone https://github.com/calstfrancis/gost
@@ -82,11 +75,10 @@ cd gost
 python3 -m essay_builder.app
 ```
 
-### Build your own AppImage / RPM / DEB
+### Build your own RPM / DEB
 ```bash
-bash build-appimage.sh   # produces gost-0.1.9-x86_64.AppImage
-bash build-rpm.sh        # produces gost-0.1.9-1.noarch.rpm  (requires rpmbuild)
-bash build-deb.sh        # produces gost_0.1.9_all.deb       (requires dpkg-deb; run on Debian/Ubuntu)
+bash build-rpm.sh   # produces gost-0.1.9-1.noarch.rpm  (requires rpmbuild)
+bash build-deb.sh   # produces gost_0.1.9_all.deb       (requires dpkg-deb; run on Debian/Ubuntu)
 ```
 
 ## Usage

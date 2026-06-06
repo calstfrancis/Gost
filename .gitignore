@@ -15,6 +15,12 @@ AppDir/
 *.AppImage
 .appimage-tools/
 
+# RPM / DEB build artefacts
+.rpmbuild/
+.debuild/
+*.rpm
+*.deb
+
 # Dev tooling
 .venv/
 venv/
