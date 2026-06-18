@@ -30,9 +30,20 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.11-dev1" date="2026-06-17">
+    <release version="0.1.11" date="2026-06-18">
       <description>
-        <p>Development build: flatpak packaging, statusbar, and comprehensive book publishing features.</p>
+        <p>Flatpak packaging, statusbar with GOST Type B and Book mode toggles, and comprehensive book publishing layout features.</p>
+        <ul>
+          <li>Flatpak distribution via personal repo</li>
+          <li>Status bar: GOST Type B toggle, Book mode toggle, version button</li>
+          <li>Book document class with front matter, back matter, and chapter structure</li>
+          <li>Print-ready bleed and crop marks</li>
+          <li>Recto chapter openings and empty blank pages</li>
+          <li>Book-standard and custom per-position running headers</li>
+          <li>Footer page numbers, drop caps, chapter epigraphs, colophon, index</li>
+          <li>Heading font pairing, footnote style, part title page style</li>
+          <li>List of figures and list of tables</li>
+        </ul>
       </description>
     </release>
     <release version="0.1.10" date="2026-06-06">

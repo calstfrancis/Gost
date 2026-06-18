@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.11-dev1] – Flatpak, statusbar, book publishing layout, per-page headers
+## [0.1.11] – 2026-06-18 — Flatpak, statusbar, book publishing layout, per-page headers
 
 ### Added
 - **Flatpak packaging** — `ca.calstfrancis.Gost.yml` manifest, `dev-build.sh`, `publish-flatpak.sh`, and `flatpak-gen-sources.sh`. Bundles python-docx offline; LaTeX/Typst compilers are called via `flatpak-spawn --host` so the sandbox stays small.

@@ -1,27 +1,36 @@
-# Gost v0.1.10
+# Gost v0.1.11
 
-**Released:** 2026-06-06
+**Released:** 2026-06-18
 
 ## Download
 
 | File | Platform |
 |------|----------|
-| `gost-0.1.10-1.noarch.rpm` | Fedora, openSUSE, RHEL, and RPM-based distros |
-| `gost_0.1.10_all.deb` | Debian, Ubuntu, Linux Mint, and DEB-based distros |
+| Flatpak | All Linux (via personal flatpak repo) |
+| `gost-0.1.11-1.noarch.rpm` | Fedora, openSUSE, RHEL, and RPM-based distros |
+| `gost_0.1.11_all.deb` | Debian, Ubuntu, Linux Mint, and DEB-based distros |
 
 ## Installation
+
+### Flatpak (recommended)
+
+```bash
+flatpak remote-add --user calstfrancis \
+  https://calstfrancis.github.io/flatpak/calstfrancis.flatpakrepo
+flatpak install calstfrancis ca.calstfrancis.Gost
+```
 
 ### RPM (Fedora / openSUSE / RHEL)
 
 ```bash
-sudo zypper in ./gost-0.1.10-1.noarch.rpm   # openSUSE
-sudo dnf install ./gost-0.1.10-1.noarch.rpm  # Fedora / RHEL
+sudo zypper in ./gost-0.1.11-1.noarch.rpm   # openSUSE
+sudo dnf install ./gost-0.1.11-1.noarch.rpm  # Fedora / RHEL
 ```
 
 ### DEB (Debian / Ubuntu / Mint)
 
 ```bash
-sudo apt install ./gost_0.1.10_all.deb
+sudo apt install ./gost_0.1.11_all.deb
 ```
 
 ---
