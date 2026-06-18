@@ -2,6 +2,7 @@
 app.py — Adw.Application subclass for Gost.
 """
 
+import os
 import shutil
 import subprocess
 import sys
