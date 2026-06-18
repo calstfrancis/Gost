@@ -230,8 +230,7 @@ class GostWindow(Adw.ApplicationWindow):
         self.connect("notify::default-height", self._on_window_resize)
 
     def _on_window_resize(self, widget, param):
-        w = self.get_default_width()
-        h = self.get_default_height()
+        w, h = self.get_default_size()
         if w > 0 and h > 0:
             self._config.set_window_size(w, h)
 
@@ -2004,6 +2003,8 @@ class GostWindow(Adw.ApplicationWindow):
         if not btn.get_active():
             return
         mode = btn._preview_mode
+        if not hasattr(self, "_preview_inner_stack"):
+            return
         self._preview_inner_stack.set_visible_child_name(mode)
         if mode == "source":
             self._refresh_source()
