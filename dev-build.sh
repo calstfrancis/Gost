@@ -13,9 +13,7 @@ set -euo pipefail
 
 MANIFEST="ca.calstfrancis.Gost.yml"
 
-VERSION=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(d['tool']['setuptools']['dynamic']['version']['attr'].split('.')[-1])" 2>/dev/null || \
-    python3 -c "import importlib.metadata; print(importlib.metadata.version('gost-academic'))" 2>/dev/null || \
-    python3 -c "exec(open('essay_builder/__init__.py').read()); print(__version__)")
+VERSION=$(python3 -c "exec(open('essay_builder/__init__.py').read()); print(__version__)")
 echo "==> Building Gost $VERSION (local dev install)"
 
 if [ ! -f python3-deps.json ]; then
