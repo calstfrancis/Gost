@@ -234,8 +234,7 @@ class GostWindow(Adw.ApplicationWindow):
         if w > 0 and h > 0:
             self._config.set_window_size(w, h)
 
-    def _on_gost_font_toggled(self, switch, _param):
-        active = switch.get_active()
+    def _set_gost_font(self, active: bool):
         self._config.set("use_gost_font", active)
         self._apply_gost_font(active)
         if hasattr(self, "_sb_gost_btn"):
@@ -417,29 +416,6 @@ class GostWindow(Adw.ApplicationWindow):
 
         sidebar_box.append(self._nav_list)
 
-        # GOST Type B font toggle
-        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        sep.set_margin_top(4)
-        sidebar_box.append(sep)
-        font_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        font_row.set_margin_start(12)
-        font_row.set_margin_end(12)
-        font_row.set_margin_top(8)
-        font_row.set_margin_bottom(8)
-        font_lbl = Gtk.Label(label="GOST Type B font")
-        font_lbl.set_hexpand(True)
-        font_lbl.set_xalign(0)
-        self._gost_font_switch = Gtk.Switch()
-        self._gost_font_switch.set_valign(Gtk.Align.CENTER)
-        self._gost_font_switch.set_active(self._config.get("use_gost_font", False))
-        self._gost_font_switch.set_tooltip_text(
-            "Apply the GOST Type B monospace font to the Gost interface"
-        )
-        self._gost_font_switch.connect("notify::active", self._on_gost_font_toggled)
-        font_row.append(font_lbl)
-        font_row.append(self._gost_font_switch)
-        sidebar_box.append(font_row)
-
         self._nav_view.set_sidebar(sidebar_page)
 
         content_page = Adw.NavigationPage(title="Gost")
@@ -559,14 +535,17 @@ class GostWindow(Adw.ApplicationWindow):
         return bar
 
     def _on_sb_gost_toggled(self, btn):
-        active = btn.get_active()
-        self._gost_font_switch.set_active(active)
+        self._set_gost_font(btn.get_active())
 
     def _on_sb_book_toggled(self, btn):
         if not hasattr(self, "_doc_type_btns"):
             return
-        key = "book" if btn.get_active() else "article"
+        book = btn.get_active()
+        key = "book" if book else "article"
         self._doc_type_btns[key].set_active(True)
+        if book:
+            self._fmt_btns["latex"].set_active(True)
+            self._nav_select("layout")
 
     # ------------------------------------------------------------------
     # Live preview pane
@@ -1358,31 +1337,20 @@ class GostWindow(Adw.ApplicationWindow):
         grp = Adw.PreferencesGroup(title="Page Layout")
         box.append(grp)
 
-        # Document Type (Article / Book) — LaTeX only, first in group so it's visible
-        doc_type_row = Adw.ActionRow(title="Document class")
-        doc_type_row.set_tooltip_text(
-            "Article uses extarticle with \\section{} headings; "
-            "Book uses extbook with \\chapter{} and \\frontmatter/\\mainmatter/\\backmatter"
-        )
-        dt_box = Gtk.Box(spacing=4)
-        dt_box.set_valign(Gtk.Align.CENTER)
+        # Doc type state (Article / Book) — controlled by the statusbar Book toggle.
+        # Buttons are kept off-screen for radio-group logic and state save/restore.
         self._doc_type_btns: dict = {}
         dt_group = None
-        for dt_key, dt_label in (("article", "Article"), ("book", "Book")):
-            btn = Gtk.ToggleButton(label=dt_label)
-            btn.add_css_class("flat")
+        for dt_key in ("article", "book"):
+            btn = Gtk.ToggleButton()
             if dt_group is None:
                 dt_group = btn
             else:
                 btn.set_group(dt_group)
             btn._dt_key = dt_key
             btn.connect("toggled", self._on_doc_type_toggled)
-            dt_box.append(btn)
             self._doc_type_btns[dt_key] = btn
         self._doc_type_btns["article"].set_active(True)
-        doc_type_row.add_suffix(dt_box)
-        grp.add(doc_type_row)
-        self._latex_only_widgets.append(doc_type_row)
 
         # Paper size — combo with standard sizes + Custom
         _paper_labels = [lbl for _, lbl in PAPER_OPTIONS]
