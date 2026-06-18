@@ -16,12 +16,7 @@ finish-args:
   - --talk-name=org.freedesktop.Flatpak
 
 modules:
-  - name: python3-deps
-    buildsystem: simple
-    build-commands:
-      - pip3 install --prefix=/app --no-build-isolation --find-links . python-docx lxml
-    sources:
-      - python3-deps.json
+  - python3-deps.json
 
   - name: gost
     buildsystem: simple
