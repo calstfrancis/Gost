@@ -53,6 +53,30 @@ FONT_OPTIONS: List[Dict[str, Any]] = [
 
 STRUCT_SECTION_TYPES = {"part", "section", "subsection", "subsubsection"}
 
+# Paper dimensions in mm — used for bleed calculations (w, h)
+PAPER_DIMS_MM = {
+    "letterpaper":    (215.9, 279.4),
+    "a4paper":        (210.0, 297.0),
+    "a5paper":        (148.0, 210.0),
+    "b5paper":        (176.0, 250.0),
+    "legalpaper":     (215.9, 355.6),
+    "executivepaper": (184.2, 266.7),
+}
+
+
+def _header_content(key: str, authors: str, title: str) -> str:
+    """Map a header content key to a LaTeX macro string."""
+    if key == "none":    return ""
+    if key == "pagenum": return r"\thepage"
+    if key == "chapter": return r"\itshape\nouppercase{\leftmark}"
+    if key == "section": return r"\itshape\nouppercase{\rightmark}"
+    if key == "author":
+        first = authors.split(",")[0].strip() if authors.strip() else ""
+        return r"\itshape " + first if first else r"\itshape Author"
+    if key == "title":
+        return r"\itshape " + (title or "")
+    return ""
+
 # ---------------------------------------------------------------------------
 # titlesec heading presets per citation style
 # ---------------------------------------------------------------------------
@@ -259,12 +283,13 @@ def _chapter_slug(title: str, index: int) -> str:
     return f"chapter{index:02d}_{slug}" if slug else f"chapter{index:02d}"
 
 
-def generate_chapter_file(title: str, cite_cmd: str = "autocite") -> str:
+def generate_chapter_file(title: str, cite_cmd: str = "autocite", doc_type: str = "article") -> str:
     """Return a minimal standalone chapter body file (no preamble)."""
+    cmd = r"\chapter" if doc_type == "book" else r"\section"
     lines = [
         f"% Chapter: {title}",
         "",
-        r"\section{" + (title or "Chapter") + "}",
+        cmd + "{" + (title or "Chapter") + "}",
         "",
         f"% Write chapter content here. Use \\{cite_cmd}{{key}} to cite.",
         "",
@@ -297,6 +322,7 @@ def generate(s: Dict[str, Any]) -> str:
     eng      = s.get("engine",         "xelatex")
     fs       = s.get("font_size",      "11pt")
     paper    = s.get("paper",          "letterpaper")
+    doc_type = s.get("doc_type",       "article")
 
     _cit_def = STYLE_DEFAULTS.get(cit, STYLE_DEFAULTS["APA"])
     bib_sty  = s.get("biblatex_style") or _cit_def["biblatex_style"]
@@ -336,12 +362,64 @@ def generate(s: Dict[str, Any]) -> str:
 
     features    = s.get("latex_features", [])
     languages   = s.get("languages",      [])
+    twoside     = s.get("twoside",        False)
+    inner_m     = s.get("inner_margin",   "1.50")
+    outer_m     = s.get("outer_margin",   "1.00")
+
+    # Publishing features
+    widow_orphan    = s.get("widow_orphan",       "relaxed")
+    open_right      = s.get("open_right",         False)
+    bleed_enabled   = s.get("bleed_enabled",      False)
+    bleed_mm_val    = int(s.get("bleed_mm",       3))
+    chapter_style   = s.get("chapter_style",      "full")
+    has_half_title  = s.get("has_half_title",     False)
+    has_copyright   = s.get("has_copyright_page", False)
+    has_dedication  = s.get("has_dedication",     False)
+    dedication_text = s.get("dedication_text",    "")
+
+    # Custom header positions
+    hdr_le = s.get("header_le", "pagenum")
+    hdr_re = s.get("header_re", "chapter")
+    hdr_lo = s.get("header_lo", "chapter")
+    hdr_ro = s.get("header_ro", "pagenum")
+
+    # Publishing features — batch 2
+    empty_blank_pages = s.get("empty_blank_pages", False)
+    footer_style      = s.get("footer_style",      "none")
+    chapter_dropcap   = s.get("chapter_dropcap",   False)
+    heading_font      = s.get("heading_font",       "none")
+    heading_font_name = s.get("heading_font_name",  "")
+    footnote_style    = s.get("footnote_style",     "default")
+    has_index         = s.get("has_index",          False)
+    has_lof           = s.get("has_lof",            False)
+    has_lot           = s.get("has_lot",            False)
+    has_colophon      = s.get("has_colophon",       False)
+    colophon_text     = s.get("colophon_text",      "")
+    chapter_epigraph  = s.get("chapter_epigraph",   False)
+    part_title_style  = s.get("part_title_style",   "plain")
 
     # ---- document class ----
-    L.append("% Academic Essay Template")
+    is_book = doc_type == "book"
+    doc_class = "extbook" if is_book else "extarticle"
+    L.append("% Academic {} Template".format("Book" if is_book else "Essay"))
     L.append("% Citation style: {}  |  Engine: {}".format(cit, eng))
     L.append("")
-    L.append(r"\documentclass[" + fs + "," + paper + r"]{extarticle}")
+    paper_cls = paper if paper != "custom" else ""
+    side_opt  = "twoside" if twoside else ("oneside" if is_book else "")
+    open_opt  = "openright" if (open_right and is_book) else ""
+    opts = ",".join(x for x in [fs, paper_cls, side_opt, open_opt] if x)
+    L.append(r"\documentclass[" + opts + "]{" + doc_class + "}")
+
+    if open_right and empty_blank_pages:
+        L.append("")
+        L.append("% --- Empty blank verses (openright) ---")
+        L.append(r"\makeatletter")
+        L.append(r"\renewcommand{\cleardoublepage}{%")
+        L.append(r"  \clearpage\if@twoside\ifodd\c@page\else")
+        L.append(r"    \null\thispagestyle{empty}%")
+        L.append(r"    \newpage\if@twocolumn\hbox{}\newpage\fi\fi\fi}")
+        L.append(r"\makeatother")
+
     L.append("")
     L.append("% --- Encoding & fonts ---")
 
@@ -372,7 +450,34 @@ def generate(s: Dict[str, Any]) -> str:
 
     L.append("")
     L.append("% --- Page geometry ---")
-    L.append(r"\usepackage[" + paper + ",margin=" + margin + r"in]{geometry}")
+    if paper == "custom":
+        pw_mm = s.get("paper_w_mm", 210)
+        ph_mm = s.get("paper_h_mm", 297)
+    else:
+        pw_mm, ph_mm = PAPER_DIMS_MM.get(paper, (210.0, 297.0))
+    if bleed_enabled:
+        b = bleed_mm_val
+        full_w = pw_mm + 2 * b
+        full_h = ph_mm + 2 * b
+        base_geo = "paperwidth={:.1f}mm,paperheight={:.1f}mm,layoutwidth={:.1f}mm,layoutheight={:.1f}mm,layouthoffset={:.1f}mm,layoutvoffset={:.1f}mm".format(
+            full_w, full_h, pw_mm, ph_mm, b, b)
+        if twoside:
+            L.append(r"\usepackage[{},inner={}in,outer={}in]{{geometry}}".format(
+                base_geo, inner_m, outer_m))
+        else:
+            L.append(r"\usepackage[{},margin={}in]{{geometry}}".format(base_geo, margin))
+        L.append(r"\usepackage[cam,width={:.1f}truemm,height={:.1f}truemm,noinfo,center]{{crop}}".format(
+            full_w, full_h))
+    else:
+        if paper == "custom":
+            size_opts = "paperwidth={:.0f}mm,paperheight={:.0f}mm".format(pw_mm, ph_mm)
+        else:
+            size_opts = paper
+        if twoside:
+            L.append(r"\usepackage[{},inner={}in,outer={}in]{{geometry}}".format(
+                size_opts, inner_m, outer_m))
+        else:
+            L.append(r"\usepackage[{},margin={}in]{{geometry}}".format(size_opts, margin))
 
     L.append("")
     L.append("% --- Line spacing ---")
@@ -395,6 +500,24 @@ def generate(s: Dict[str, Any]) -> str:
         L.append("% --- Suppress section numbering ---")
         L.append(r"\setcounter{secnumdepth}{0}")
 
+    if footnote_style != "default":
+        L.append("")
+        L.append("% --- Footnote style ---")
+        if footnote_style == "per_page":
+            L.append(r"\usepackage{perpage}")
+            L.append(r"\MakePerPage{footnote}")
+        elif footnote_style == "symbols":
+            L.append(r"\renewcommand{\thefootnote}{\fnsymbol{footnote}}")
+
+    if widow_orphan != "relaxed":
+        L.append("")
+        L.append("% --- Widow/orphan control ---")
+        penalty = "1000" if widow_orphan == "standard" else "10000"
+        L.append(r"\clubpenalty=" + penalty)
+        L.append(r"\widowpenalty=" + penalty)
+        if widow_orphan == "strict":
+            L.append(r"\displaywidowpenalty=" + penalty)
+
     if use_mc:
         L.append("")
         L.append("% --- Multi-column ---")
@@ -409,6 +532,43 @@ def generate(s: Dict[str, Any]) -> str:
         L.append("% --- Section heading style ({}) ---".format(cit))
         for line in HEADING_STYLES[cit]:
             L.append(line)
+
+    if is_book and chapter_style != "full":
+        L.append("")
+        L.append("% --- Chapter label style: {} ---".format(chapter_style))
+        L.append(r"\usepackage{titlesec}")
+        if chapter_style == "numbered":
+            L.append(r"\titleformat{\chapter}[block]{\normalfont\huge\bfseries}{\thechapter.}{0.5em}{}")
+        elif chapter_style == "title_only":
+            L.append(r"\titleformat{\chapter}[block]{\normalfont\huge\bfseries}{}{0em}{}")
+        L.append(r"\titlespacing*{\chapter}{0pt}{3ex plus 1ex}{2ex}")
+
+    if heading_font != "none":
+        L.append("")
+        L.append("% --- Heading font ---")
+        L.append(r"\usepackage{titlesec}")
+        if heading_font == "custom" and heading_font_name.strip():
+            L.append(r"\usepackage{fontspec}")
+            L.append(r"\newfontfamily\headingfont{" + heading_font_name.strip() + "}")
+            _hf = r"\headingfont"
+        else:
+            _hf = r"\sffamily"
+        if is_book:
+            L.append(r"\titleformat{\chapter}[display]{" + _hf + r"\huge\bfseries}{\chaptertitlename\ \thechapter}{0pt}{}")
+        L.append(r"\titleformat{\section}{" + _hf + r"\large\bfseries}{\thesection}{1em}{}")
+        L.append(r"\titleformat{\subsection}{" + _hf + r"\normalsize\bfseries}{\thesubsection}{1em}{}")
+        L.append(r"\titleformat{\subsubsection}{" + _hf + r"\normalsize\itshape}{\thesubsubsection}{1em}{}")
+
+    if is_book and part_title_style != "plain":
+        L.append("")
+        L.append("% --- Part title page style ---")
+        L.append(r"\usepackage{titlesec}")
+        if part_title_style == "fullpage":
+            L.append(r"\titleformat{\part}[display]{\normalfont\Huge\bfseries\centering}{\partname\ \thepart}{0pt}{}")
+            L.append(r"\titlespacing*{\part}{0pt}{5ex}{4ex}")
+        elif part_title_style == "ruled":
+            L.append(r"\titleformat{\part}[display]{\normalfont\Huge\bfseries\centering}{\partname\ \thepart}{0pt}{}[\vspace{1ex}\hrule\vspace{0.5ex}]")
+            L.append(r"\titlespacing*{\part}{0pt}{5ex}{4ex}")
 
     L.append("")
     L.append("% --- BibLaTeX ({}) ---".format(cit))
@@ -445,7 +605,8 @@ def generate(s: Dict[str, Any]) -> str:
         L.append("% --- Page numbers only (bottom centre) ---")
         L.append(r"\pagestyle{plain}")
 
-    elif header_style in ("title_left", "section_left", "author_left", "doublesided"):
+    elif header_style in ("title_left", "section_left", "author_left", "doublesided",
+                          "chapter_author", "custom_recto_verso"):
         L.append("% --- Custom running header ---")
         L.append(r"\usepackage{fancyhdr}")
         L.append(r"\pagestyle{fancy}")
@@ -468,6 +629,24 @@ def generate(s: Dict[str, Any]) -> str:
             L.append(r'\fancyhead[LE,RO]{\thepage}')
             L.append(r'\fancyhead[RE]{\itshape\nouppercase{\leftmark}}')
             L.append(r'\fancyhead[LO]{\itshape\nouppercase{\rightmark}}')
+        elif header_style == "chapter_author":
+            auth_last = ""
+            if authors.strip():
+                parts = authors.split(",")[0].strip().split()
+                auth_last = parts[-1] if parts else ""
+            L.append(r'\fancyhead[LE]{\thepage}')
+            L.append(r'\fancyhead[RE]{\itshape ' + auth_last + '}')
+            L.append(r'\fancyhead[LO]{\itshape\nouppercase{\leftmark}}')
+            L.append(r'\fancyhead[RO]{\thepage}')
+        elif header_style == "custom_recto_verso":
+            _le = _header_content(hdr_le, authors, title)
+            _re = _header_content(hdr_re, authors, title)
+            _lo = _header_content(hdr_lo, authors, title)
+            _ro = _header_content(hdr_ro, authors, title)
+            if _le: L.append(r'\fancyhead[LE]{' + _le + '}')
+            if _re: L.append(r'\fancyhead[RE]{' + _re + '}')
+            if _lo: L.append(r'\fancyhead[LO]{' + _lo + '}')
+            if _ro: L.append(r'\fancyhead[RO]{' + _ro + '}')
         L.append(rf'\renewcommand{{\headrulewidth}}{{{rule_w}}}')
         L.append(r'\renewcommand{\footrulewidth}{0pt}')
 
@@ -500,6 +679,21 @@ def generate(s: Dict[str, Any]) -> str:
             L.append(r"\fancyfoot[C]{\thepage}")
             L.append(r"\renewcommand{\headrulewidth}{0pt}")
 
+    if footer_style != "none":
+        L.append("")
+        if header_style in ("none", "pagenum_bottom"):
+            L.append("% --- Footer ---")
+            L.append(r"\usepackage{fancyhdr}")
+            L.append(r"\pagestyle{fancy}")
+            L.append(r"\fancyhf{}")
+            L.append(r"\renewcommand{\headrulewidth}{0pt}")
+        else:
+            L.append("% --- Footer (added to header style above) ---")
+        if footer_style == "center":
+            L.append(r"\fancyfoot[C]{\thepage}")
+        elif footer_style == "outer":
+            L.append(r"\fancyfoot[LE,RO]{\thepage}")
+
     # Language packages
     if languages:
         L.append("")
@@ -518,6 +712,17 @@ def generate(s: Dict[str, Any]) -> str:
             pkg = FEATURE_PACKAGES.get(feat)
             if pkg:
                 L.append(pkg)
+
+    if has_index:
+        L.append("")
+        L.append("% --- Index ---")
+        L.append(r"\usepackage[makeindex]{imakeidx}")
+        L.append(r"\makeindex")
+
+    if chapter_dropcap and "dropcaps" not in features:
+        L.append("")
+        L.append("% --- Drop caps (chapter openings) ---")
+        L.append(r"\usepackage{lettrine}")
 
     if notes == "endnote" and cit in ("SBL", "Chicago"):
         L.append("")
@@ -558,33 +763,126 @@ def generate(s: Dict[str, Any]) -> str:
     # ---- body ----
     L.append("")
     L.append(r"\begin{document}")
-    L.append("")
-    L.append(r"\maketitle")
-    if suppress_first and header_style not in ("auto", "none", "pagenum_bottom"):
-        L.append(r"\thispagestyle{plain}")
 
-    if has_abs:
+    if is_book:
         L.append("")
-        L.append(r"\begin{abstract}")
-        L.append("  % Your abstract here.")
-        L.append(r"\end{abstract}")
+        L.append(r"\frontmatter")
 
-    if has_kw:
-        L.append("")
-        L.append(r"\noindent\textbf{Keywords:} keyword one, keyword two, keyword three")
+        if has_half_title:
+            L.append("")
+            L.append(r"% --- Half-title page ---")
+            L.append(r"\thispagestyle{empty}")
+            L.append(r"\vspace*{\fill}")
+            L.append(r"\begin{center}")
+            esc_title = (title or "Book Title").replace("{", r"\{").replace("}", r"\}")
+            L.append("  \\large " + esc_title)
+            L.append(r"\end{center}")
+            L.append(r"\vspace*{\fill}")
+            L.append(r"\clearpage")
 
-    if use_toc:
         L.append("")
-        L.append(r"\tableofcontents")
-        L.append(r"\newpage")
+        L.append(r"\maketitle")
+        if suppress_first and header_style not in ("auto", "none", "pagenum_bottom"):
+            L.append(r"\thispagestyle{plain}")
+
+        if has_copyright:
+            L.append("")
+            L.append(r"% --- Copyright page (verso of title) ---")
+            L.append(r"\clearpage")
+            L.append(r"\thispagestyle{empty}")
+            L.append(r"\vspace*{\fill}")
+            first_author = authors.split(",")[0].strip() if authors.strip() else "Author"
+            L.append(r"\noindent\textcopyright{} \the\year\ " + first_author)
+            L.append(r"\par\medskip")
+            L.append(r"\noindent ISBN: 000-0-000-00000-0  % placeholder")
+            L.append(r"\par\medskip")
+            L.append(r"\noindent All rights reserved.")
+            L.append(r"\clearpage")
+
+        if has_dedication:
+            L.append("")
+            L.append(r"% --- Dedication page ---")
+            L.append(r"\thispagestyle{empty}")
+            L.append(r"\vspace*{\fill}")
+            L.append(r"\begin{center}")
+            ded_line = (dedication_text.strip() or "Dedication text here").replace("{", r"\{").replace("}", r"\}")
+            L.append("  \\itshape " + ded_line)
+            L.append(r"\end{center}")
+            L.append(r"\vspace*{\fill}")
+            L.append(r"\clearpage")
+
+        if has_abs:
+            L.append("")
+            L.append(r"\begin{abstract}")
+            L.append("  % Your abstract here.")
+            L.append(r"\end{abstract}")
+
+        if has_kw:
+            L.append("")
+            L.append(r"\noindent\textbf{Keywords:} keyword one, keyword two, keyword three")
+
+        if use_toc:
+            L.append("")
+            L.append(r"\tableofcontents")
+        if has_lof:
+            L.append("")
+            L.append(r"\listoffigures")
+        if has_lot:
+            L.append("")
+            L.append(r"\listoftables")
+
+        L.append("")
+        L.append(r"\mainmatter")
+    else:
+        L.append("")
+        L.append(r"\maketitle")
+        if suppress_first and header_style not in ("auto", "none", "pagenum_bottom"):
+            L.append(r"\thispagestyle{plain}")
+
+        if has_abs:
+            L.append("")
+            L.append(r"\begin{abstract}")
+            L.append("  % Your abstract here.")
+            L.append(r"\end{abstract}")
+
+        if has_kw:
+            L.append("")
+            L.append(r"\noindent\textbf{Keywords:} keyword one, keyword two, keyword three")
+
+        if use_toc:
+            L.append("")
+            L.append(r"\tableofcontents")
+            L.append(r"\newpage")
+        if has_lof:
+            L.append("")
+            L.append(r"\listoffigures")
+        if has_lot:
+            L.append("")
+            L.append(r"\listoftables")
 
     raw_chapters = s.get("chapters", [])
     chapters = [c["title"] if isinstance(c, dict) else c for c in raw_chapters]
     multifile = s.get("multifile", False)
 
+    top_cmd = r"\chapter" if is_book else r"\section"
+
     L.append("")
     L.append("% --- Body ---")
     L.append("")
+
+    def _chapter_stub(ch_title: str) -> None:
+        L.append(top_cmd + "{" + (ch_title or "Untitled Chapter") + "}")
+        L.append("")
+        if is_book and chapter_epigraph:
+            L.append(r"\epigraph{Quote text here.}{--- Attribution}")
+            L.append("")
+        if is_book and chapter_dropcap:
+            L.append(r"\lettrine[lines=3]{F}{} irst paragraph text here."
+                     "  Use \\" + cite_cmd + r"{citationkey} to cite.")
+        else:
+            L.append("% Begin writing here. Use " + chr(92) + cite_cmd + "{citationkey} to cite.")
+        L.append("")
+
     if chapters:
         if multifile:
             for i, ch in enumerate(chapters, 1):
@@ -593,25 +891,43 @@ def generate(s: Dict[str, Any]) -> str:
                 L.append("")
         else:
             for ch in chapters:
-                L.append(r"\section{" + (ch or "Untitled Chapter") + "}")
-                L.append("")
-                L.append("% Begin writing here. Use " + chr(92) + cite_cmd + "{citationkey} to cite.")
-                L.append("")
+                _chapter_stub(ch)
     else:
-        L.append(r"\section{Introduction}")
-        L.append("")
-        L.append("% Begin writing here. Use " + chr(92) + cite_cmd + "{citationkey} to cite.")
-        L.append("")
-        L.append(r"\section{Conclusion}")
-        L.append("")
+        _chapter_stub("Introduction")
+        if not is_book:
+            _chapter_stub("Conclusion")
 
     if notes == "endnote" and cit in ("SBL", "Chicago"):
         L.append("")
         L.append(r"\theendnotes")
 
+    has_backmatter = is_book and (print_bib or has_index or has_colophon)
+    if has_backmatter:
+        L.append("")
+        L.append(r"\backmatter")
+
     if print_bib:
         L.append("")
         L.append(r"\printbibliography[heading=bibintoc,title={" + bib_head + "}]")
+
+    if has_index:
+        L.append("")
+        L.append(r"\printindex")
+
+    if has_colophon:
+        L.append("")
+        L.append(r"% --- Colophon ---")
+        L.append(r"\clearpage")
+        L.append(r"\thispagestyle{empty}")
+        L.append(r"\vspace*{\fill}")
+        L.append(r"\begin{center}\small\itshape")
+        font_display = next((o["display"] for o in FONT_OPTIONS if o["key"] == font_pkg),
+                            "Computer Modern")
+        default_col = "Typeset in {} using \\LaTeX".format(font_display)
+        for line in (colophon_text.strip() or default_col).splitlines():
+            L.append("  " + line)
+        L.append(r"\end{center}")
+        L.append(r"\vspace*{\fill}")
 
     L.append("")
     L.append(r"\end{document}")

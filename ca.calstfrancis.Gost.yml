@@ -1,0 +1,37 @@
+app-id: ca.calstfrancis.Gost
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: gost
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=/tmp
+  - --share=network
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.Flatpak
+
+modules:
+  - name: python3-deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-build-isolation --find-links . python-docx lxml
+    sources:
+      - python3-deps.json
+
+  - name: gost
+    buildsystem: simple
+    sources:
+      - type: git
+        url: https://github.com/calstfrancis/gost.git
+        branch: main
+    build-commands:
+      - pip3 install --prefix=/app --no-build-isolation --no-deps .
+      - install -Dm644 ca.calstfrancis.Gost.desktop /app/share/applications/ca.calstfrancis.Gost.desktop
+      - install -Dm644 icons/gost.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost.svg
+      - install -Dm644 icons/gost-symbolic.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost-symbolic.svg
+      - install -Dm644 ca.calstfrancis.Gost.metainfo.xml /app/share/metainfo/ca.calstfrancis.Gost.metainfo.xml

@@ -61,6 +61,20 @@ def _png_bytes_to_texture(data: bytes) -> Gdk.Texture:
 # Feature / language constants
 # ---------------------------------------------------------------------------
 
+PAPER_OPTIONS = [
+    ("letterpaper",    "Letter  (8.5 × 11 in)"),
+    ("a4paper",        "A4  (210 × 297 mm)"),
+    ("a5paper",        "A5  (148 × 210 mm)"),
+    ("b5paper",        "B5  (176 × 250 mm)"),
+    ("legalpaper",     "Legal  (8.5 × 14 in)"),
+    ("executivepaper", "Executive  (7.25 × 10.5 in)"),
+    ("custom",         "Custom…"),
+]
+
+FONT_SIZE_OPTIONS = ["8pt", "9pt", "10pt", "11pt", "12pt", "14pt", "17pt", "20pt"]
+
+# ---------------------------------------------------------------------------
+
 LATEX_FEATURES = [
     ("dropcaps",     "Drop caps (lettrine)",         r"Decorative \lettrine{L}{etter} first letters"),
     ("marginalia",   "Marginalia (marginnote)",       r"\marginnote{} for margin notes"),
@@ -98,6 +112,8 @@ LANGUAGES = [
 HEADER_STYLE_KEYS = [
     "auto", "none", "pagenum_bottom",
     "title_left", "section_left", "author_left", "doublesided",
+    "chapter_author",
+    "custom_recto_verso",
 ]
 HEADER_STYLE_LABELS = [
     "Auto (follows citation style)",
@@ -107,7 +123,31 @@ HEADER_STYLE_LABELS = [
     "Section title  ·  Page number",
     "Author  ·  Page number",
     "Double-sided (section / page alternating)",
+    "Book standard (author verso, chapter recto)",
+    "Custom (choose per-position content)",
 ]
+
+HEADER_CONTENT_KEYS   = ["none", "pagenum", "chapter", "section", "author", "title"]
+HEADER_CONTENT_LABELS = [
+    "Empty",
+    "Page number",
+    "Chapter (\\leftmark)",
+    "Section (\\rightmark)",
+    "Author",
+    "Book title",
+]
+
+FOOTER_STYLE_KEYS   = ["none", "center", "outer"]
+FOOTER_STYLE_LABELS = ["None", "Page number — bottom centre", "Page number — bottom outer"]
+
+HEADING_FONT_KEYS   = ["none", "sans", "custom"]
+HEADING_FONT_LABELS = ["Same as body", "Sans-serif  (\\sffamily)", "Custom font…"]
+
+FOOTNOTE_STYLE_KEYS   = ["default", "per_page", "symbols"]
+FOOTNOTE_STYLE_LABELS = ["Document default  (1, 2, 3…)", "Restart per page", "Symbols  (*, †, ‡…)"]
+
+PART_TITLE_STYLE_KEYS   = ["plain", "fullpage", "ruled"]
+PART_TITLE_STYLE_LABELS = ["Plain (default)", "Full-page centred", "Centred with rule"]
 
 
 # Per-style layout/font presets applied when the user selects a citation style
@@ -153,6 +193,7 @@ class GostWindow(Adw.ApplicationWindow):
         self._engine    = self._config.get("engine", "xelatex")
         self._font_size = self._config.get("font_size", "11pt")
         self._paper     = self._config.get("paper", "letterpaper")
+        self._unit      = self._config.get("margin_unit", "in")
 
         logger = get_logger()
         logger.info(f"Loaded settings: engine={self._engine}, style={self._cit_style}")
@@ -198,6 +239,10 @@ class GostWindow(Adw.ApplicationWindow):
         active = switch.get_active()
         self._config.set("use_gost_font", active)
         self._apply_gost_font(active)
+        if hasattr(self, "_sb_gost_btn"):
+            self._sb_gost_btn.handler_block_by_func(self._on_sb_gost_toggled)
+            self._sb_gost_btn.set_active(active)
+            self._sb_gost_btn.handler_unblock_by_func(self._on_sb_gost_toggled)
 
     def _apply_gost_font(self, active: bool):
         display = Gdk.Display.get_default()
@@ -224,9 +269,9 @@ class GostWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _build_ui(self):
-        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        tv = Adw.ToolbarView()
         self._toast_overlay = Adw.ToastOverlay()
-        self._toast_overlay.set_child(outer)
+        self._toast_overlay.set_child(tv)
         self.set_content(self._toast_overlay)
 
         # ---- Header bar ----
@@ -319,13 +364,13 @@ class GostWindow(Adw.ApplicationWindow):
         self._menu_btn.set_popover(self._build_menu_popover())
         hbar.pack_end(self._menu_btn)
 
-        outer.append(hbar)
+        tv.add_top_bar(hbar)
 
         # ---- Navigation split view ----
         self._nav_view = Adw.NavigationSplitView()
         self._nav_view.set_vexpand(True)
         self._nav_view.set_hexpand(True)
-        outer.append(self._nav_view)
+        tv.set_content(self._nav_view)
 
         sidebar_page = Adw.NavigationPage(title="Sections")
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -444,6 +489,9 @@ class GostWindow(Adw.ApplicationWindow):
         # Apply simple mode (hides Chapters / Custom Code / Grammar when on)
         self._apply_simple_mode(self._simple_mode)
 
+        # ---- Status bar ----
+        tv.add_bottom_bar(self._build_status_bar())
+
         # Set initial paned position once the window is realised
         def _set_paned_pos(*_):
             w = self.get_width() or 960
@@ -468,6 +516,58 @@ class GostWindow(Adw.ApplicationWindow):
             css,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
+
+    def _build_status_bar(self) -> Gtk.Box:
+        from essay_builder import __version__
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        bar.add_css_class("toolbar")
+
+        # Left group: GOST Type B toggle, Book mode toggle
+        left = Gtk.Box(spacing=2)
+        left.set_margin_start(4)
+        left.set_hexpand(True)
+
+        self._sb_gost_btn = Gtk.ToggleButton(label="GOST Type B")
+        self._sb_gost_btn.add_css_class("flat")
+        self._sb_gost_btn.add_css_class("caption")
+        self._sb_gost_btn.set_active(self._config.get("use_gost_font", False))
+        self._sb_gost_btn.set_tooltip_text("Apply GOST Type B monospace font to the interface")
+        self._sb_gost_btn.connect("toggled", self._on_sb_gost_toggled)
+        left.append(self._sb_gost_btn)
+
+        self._sb_book_btn = Gtk.ToggleButton(label="Book")
+        self._sb_book_btn.add_css_class("flat")
+        self._sb_book_btn.add_css_class("caption")
+        self._sb_book_btn.set_active(False)
+        self._sb_book_btn.set_tooltip_text("Switch between Article and Book document class (LaTeX only)")
+        self._sb_book_btn.connect("toggled", self._on_sb_book_toggled)
+        left.append(self._sb_book_btn)
+
+        bar.append(left)
+
+        # Right group: version button
+        right = Gtk.Box(spacing=0)
+        right.set_margin_end(4)
+        ver_btn = Gtk.Button(label=f"v{__version__}")
+        ver_btn.add_css_class("flat")
+        ver_btn.add_css_class("dim-label")
+        ver_btn.add_css_class("caption")
+        ver_btn.set_tooltip_text("About Gost / release notes")
+        ver_btn.connect("clicked", self._show_about)
+        right.append(ver_btn)
+        bar.append(right)
+
+        return bar
+
+    def _on_sb_gost_toggled(self, btn):
+        active = btn.get_active()
+        self._gost_font_switch.set_active(active)
+
+    def _on_sb_book_toggled(self, btn):
+        if not hasattr(self, "_doc_type_btns"):
+            return
+        key = "book" if btn.get_active() else "article"
+        self._doc_type_btns[key].set_active(True)
 
     # ------------------------------------------------------------------
     # Live preview pane
@@ -700,7 +800,21 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_header_rule.set_active(s.get("header_rule", False))
         self._r_suppress_first.set_active(s.get("suppress_first_header", True))
 
-        self._r_margin.set_value(float(s.get("margin", 1.0)))
+        def _in_to_display(v_in):
+            return float(v_in) * (25.4 if self._unit == "mm" else 1.0)
+
+        self._r_margin.set_value(_in_to_display(s.get("margin", 1.0)))
+        twoside = s.get("twoside", False)
+        self._r_twoside.set_active(twoside)
+        self._r_inner_margin.set_value(_in_to_display(s.get("inner_margin", 1.5)))
+        self._r_outer_margin.set_value(_in_to_display(s.get("outer_margin", 1.0)))
+        self._r_margin.set_visible(not twoside)
+        self._r_inner_margin.set_visible(twoside)
+        self._r_outer_margin.set_visible(twoside)
+        if "margin_unit" in s and hasattr(self, "_unit_btns"):
+            saved_unit = s["margin_unit"]
+            if saved_unit != self._unit:
+                self._unit_btns[saved_unit].set_active(True)
         self._r_parindent.set_value(float(s.get("parindent", 1.5)))
         self._r_parskip.set_value(float(s.get("parskip", 0)))
         self._r_num_cols.set_value(float(s.get("num_cols", 2)))
@@ -717,18 +831,32 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_typst_notes.set_selected(
             0 if s.get("typst_notes", "footnote") == "footnote" else 1)
 
+        dt = s.get("doc_type", "article")
+        if hasattr(self, "_doc_type_btns") and dt in self._doc_type_btns:
+            self._doc_type_btns[dt].set_active(True)
+
         eng_label = {"pdflatex": "pdfLaTeX", "xelatex": "XeLaTeX", "lualatex": "LuaLaTeX"}.get(
             s.get("engine", "xelatex"), "XeLaTeX")
         if eng_label in self._engine_btns:
             self._engine_btns[eng_label].set_active(True)
 
         paper = s.get("paper", "letterpaper")
-        if paper in self._paper_btns:
-            self._paper_btns[paper].set_active(True)
+        self._paper = paper
+        if hasattr(self, "_r_paper_combo"):
+            paper_keys = [k for k, _ in PAPER_OPTIONS]
+            if paper in paper_keys:
+                self._r_paper_combo.set_selected(paper_keys.index(paper))
+        if hasattr(self, "_r_paper_w"):
+            self._r_paper_w.set_value(float(s.get("paper_w_mm", 210)))
+            self._r_paper_h.set_value(float(s.get("paper_h_mm", 297)))
+            is_custom = paper == "custom"
+            self._r_paper_w.set_visible(is_custom)
+            self._r_paper_h.set_visible(is_custom)
 
         fs = s.get("font_size", "11pt")
-        if fs in self._fs_btns:
-            self._fs_btns[fs].set_active(True)
+        self._font_size = fs
+        if hasattr(self, "_r_font_size_combo") and fs in FONT_SIZE_OPTIONS:
+            self._r_font_size_combo.set_selected(FONT_SIZE_OPTIONS.index(fs))
 
         self._r_encoding.set_selected({"utf8": 0, "latin1": 1}.get(s.get("encoding", "utf8"), 0))
 
@@ -747,6 +875,75 @@ class GostWindow(Adw.ApplicationWindow):
         hs = s.get("header_style", "auto")
         self._r_header_style.set_selected(
             HEADER_STYLE_KEYS.index(hs) if hs in HEADER_STYLE_KEYS else 0)
+        if hasattr(self, "_r_header_le"):
+            hle = s.get("header_le", "pagenum")
+            hre = s.get("header_re", "chapter")
+            hlo = s.get("header_lo", "chapter")
+            hro = s.get("header_ro", "pagenum")
+            self._r_header_le.set_selected(HEADER_CONTENT_KEYS.index(hle) if hle in HEADER_CONTENT_KEYS else 1)
+            self._r_header_re.set_selected(HEADER_CONTENT_KEYS.index(hre) if hre in HEADER_CONTENT_KEYS else 2)
+            self._r_header_lo.set_selected(HEADER_CONTENT_KEYS.index(hlo) if hlo in HEADER_CONTENT_KEYS else 2)
+            self._r_header_ro.set_selected(HEADER_CONTENT_KEYS.index(hro) if hro in HEADER_CONTENT_KEYS else 1)
+            if hasattr(self, "_custom_header_grp"):
+                self._custom_header_grp.set_visible(
+                    hs == "custom_recto_verso" and self._format == "latex")
+        if hasattr(self, "_r_open_right"):
+            self._r_open_right.set_active(s.get("open_right", False))
+        if hasattr(self, "_r_bleed_enabled"):
+            bleed = s.get("bleed_enabled", False)
+            self._r_bleed_enabled.set_active(bleed)
+            self._r_bleed_mm.set_value(float(s.get("bleed_mm", 3)))
+            self._r_bleed_mm.set_visible(bleed)
+        if hasattr(self, "_r_chapter_style"):
+            cs_idx = {"full": 0, "numbered": 1, "title_only": 2}.get(s.get("chapter_style", "full"), 0)
+            self._r_chapter_style.set_selected(cs_idx)
+        if hasattr(self, "_r_widow_orphan"):
+            wo_idx = {"relaxed": 0, "standard": 1, "strict": 2}.get(s.get("widow_orphan", "relaxed"), 0)
+            self._r_widow_orphan.set_selected(wo_idx)
+        if hasattr(self, "_r_has_half_title"):
+            self._r_has_half_title.set_active(s.get("has_half_title", False))
+        if hasattr(self, "_r_has_copyright_page"):
+            self._r_has_copyright_page.set_active(s.get("has_copyright_page", False))
+        if hasattr(self, "_r_has_dedication"):
+            ded = s.get("has_dedication", False)
+            self._r_has_dedication.set_active(ded)
+            self._r_dedication_text.set_visible(ded)
+            self._r_dedication_text.set_text(s.get("dedication_text", ""))
+        if hasattr(self, "_r_has_lof"):
+            self._r_has_lof.set_active(s.get("has_lof", False))
+        if hasattr(self, "_r_has_lot"):
+            self._r_has_lot.set_active(s.get("has_lot", False))
+        if hasattr(self, "_r_has_index"):
+            self._r_has_index.set_active(s.get("has_index", False))
+        if hasattr(self, "_r_has_colophon"):
+            col = s.get("has_colophon", False)
+            self._r_has_colophon.set_active(col)
+            self._r_colophon_text.set_visible(col)
+            self._r_colophon_text.set_text(s.get("colophon_text", ""))
+        if hasattr(self, "_r_empty_blank_pages"):
+            self._r_empty_blank_pages.set_active(s.get("empty_blank_pages", False))
+        if hasattr(self, "_r_footer_style"):
+            fs_key = s.get("footer_style", "none")
+            self._r_footer_style.set_selected(
+                FOOTER_STYLE_KEYS.index(fs_key) if fs_key in FOOTER_STYLE_KEYS else 0)
+        if hasattr(self, "_r_chapter_dropcap"):
+            self._r_chapter_dropcap.set_active(s.get("chapter_dropcap", False))
+        if hasattr(self, "_r_chapter_epigraph"):
+            self._r_chapter_epigraph.set_active(s.get("chapter_epigraph", False))
+        if hasattr(self, "_r_heading_font"):
+            hf = s.get("heading_font", "none")
+            self._r_heading_font.set_selected(
+                HEADING_FONT_KEYS.index(hf) if hf in HEADING_FONT_KEYS else 0)
+            self._r_heading_font_name.set_text(s.get("heading_font_name", ""))
+            self._r_heading_font_name.set_visible(hf == "custom" and self._format == "latex")
+        if hasattr(self, "_r_footnote_style"):
+            fn = s.get("footnote_style", "default")
+            self._r_footnote_style.set_selected(
+                FOOTNOTE_STYLE_KEYS.index(fn) if fn in FOOTNOTE_STYLE_KEYS else 0)
+        if hasattr(self, "_r_part_title_style"):
+            pt = s.get("part_title_style", "plain")
+            self._r_part_title_style.set_selected(
+                PART_TITLE_STYLE_KEYS.index(pt) if pt in PART_TITLE_STYLE_KEYS else 0)
 
         fmt = s.get("format", "typst")
         if fmt in self._fmt_btns:
@@ -844,6 +1041,72 @@ class GostWindow(Adw.ApplicationWindow):
         for r in (self._r_abstract, self._r_keywords, self._r_toc):
             r.connect("notify::active", lambda *_: self._dirty_preview())
             grp2.add(r)
+
+        self._r_has_half_title = _switch_row(
+            "Half-title page",
+            "Recto page before title with book title only (book mode, LaTeX)"
+        )
+        self._r_has_half_title.connect("notify::active", lambda *_: self._dirty_preview())
+        grp2.add(self._r_has_half_title)
+        self._latex_only_widgets.append(self._r_has_half_title)
+
+        self._r_has_copyright_page = _switch_row(
+            "Copyright page",
+            "Verso page with © notice and ISBN placeholder (book mode, LaTeX)"
+        )
+        self._r_has_copyright_page.connect("notify::active", lambda *_: self._dirty_preview())
+        grp2.add(self._r_has_copyright_page)
+        self._latex_only_widgets.append(self._r_has_copyright_page)
+
+        self._r_has_dedication = _switch_row("Dedication page", "Book mode, LaTeX only")
+        self._r_has_dedication.connect("notify::active", self._on_dedication_toggled)
+        grp2.add(self._r_has_dedication)
+        self._latex_only_widgets.append(self._r_has_dedication)
+
+        self._r_dedication_text = _entry_row("Dedication text", "For…")
+        self._r_dedication_text.set_tooltip_text("The dedication line, e.g. 'For my family'")
+        self._r_dedication_text.connect("changed", lambda *_: self._dirty_preview())
+        self._r_dedication_text.set_visible(False)
+        grp2.add(self._r_dedication_text)
+        self._latex_only_widgets.append(self._r_dedication_text)
+
+        self._r_has_lof = _switch_row("List of figures", r"Inserts \listoffigures after contents")
+        self._r_has_lof.connect("notify::active", lambda *_: self._dirty_preview())
+        grp2.add(self._r_has_lof)
+        self._latex_only_widgets.append(self._r_has_lof)
+
+        self._r_has_lot = _switch_row("List of tables", r"Inserts \listoftables after contents")
+        self._r_has_lot.connect("notify::active", lambda *_: self._dirty_preview())
+        grp2.add(self._r_has_lot)
+        self._latex_only_widgets.append(self._r_has_lot)
+
+        grp3 = Adw.PreferencesGroup(title="Back Matter")
+        box.append(grp3)
+
+        self._r_has_index = _switch_row(
+            "Index",
+            "Loads imakeidx, calls \\makeindex, inserts \\printindex in backmatter (LaTeX)"
+        )
+        self._r_has_index.connect("notify::active", lambda *_: self._dirty_preview())
+        grp3.add(self._r_has_index)
+        self._latex_only_widgets.append(self._r_has_index)
+
+        self._r_has_colophon = _switch_row(
+            "Colophon page",
+            "Final page with typesetting details — typeface, software, year (LaTeX)"
+        )
+        self._r_has_colophon.connect("notify::active", self._on_colophon_toggled)
+        grp3.add(self._r_has_colophon)
+        self._latex_only_widgets.append(self._r_has_colophon)
+
+        self._r_colophon_text = _entry_row("Colophon text", "Typeset in … using LaTeX")
+        self._r_colophon_text.set_tooltip_text(
+            "Leave blank to auto-generate from the current font selection"
+        )
+        self._r_colophon_text.connect("changed", lambda *_: self._dirty_preview())
+        self._r_colophon_text.set_visible(False)
+        grp3.add(self._r_colophon_text)
+        self._latex_only_widgets.append(self._r_colophon_text)
 
         self._content_stack.add_named(scroll, "metadata")
 
@@ -946,6 +1209,53 @@ class GostWindow(Adw.ApplicationWindow):
         grp.add(self._r_use_parts)
         self._latex_only_widgets.append(self._r_use_parts)
 
+        self._r_chapter_style = _combo_row(
+            "Chapter label style",
+            ["Chapter N  /  Title (default)", "N.  Title", "Title only (no number)"]
+        )
+        self._r_chapter_style.set_tooltip_text(
+            "How chapter numbers and titles are typeset — book mode only"
+        )
+        self._r_chapter_style.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_chapter_style)
+        self._latex_only_widgets.append(self._r_chapter_style)
+
+        self._r_part_title_style = _combo_row("Part title page style", PART_TITLE_STYLE_LABELS)
+        self._r_part_title_style.set_tooltip_text(
+            "Style of the automatically generated \\part page — book mode only"
+        )
+        self._r_part_title_style.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_part_title_style)
+        self._latex_only_widgets.append(self._r_part_title_style)
+
+        self._r_chapter_dropcap = _switch_row(
+            "Drop cap at chapter opening",
+            "\\lettrine{} first letter of each chapter's first paragraph (book mode, LaTeX)"
+        )
+        self._r_chapter_dropcap.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_chapter_dropcap)
+        self._latex_only_widgets.append(self._r_chapter_dropcap)
+
+        self._r_chapter_epigraph = _switch_row(
+            "Chapter epigraph stubs",
+            "Add \\epigraph{}{} stub below each \\chapter{} heading (book mode, LaTeX)"
+        )
+        self._r_chapter_epigraph.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_chapter_epigraph)
+        self._latex_only_widgets.append(self._r_chapter_epigraph)
+
+        grp_fn = Adw.PreferencesGroup(title="Footnote Style")
+        box.append(grp_fn)
+        self._r_footnote_style = _combo_row("Footnote numbering", FOOTNOTE_STYLE_LABELS)
+        self._r_footnote_style.set_tooltip_text(
+            "Default: sequential per document/chapter.  "
+            "Per page: restart at 1 on each page (perpage package).  "
+            "Symbols: *, †, ‡, §, ¶ sequence."
+        )
+        self._r_footnote_style.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp_fn.add(self._r_footnote_style)
+        self._latex_only_widgets.append(self._r_footnote_style)
+
         grp2 = Adw.PreferencesGroup(title="Font &amp; Encoding")
         box.append(grp2)
 
@@ -998,6 +1308,24 @@ class GostWindow(Adw.ApplicationWindow):
         grp2.add(self._r_encoding)
         self._latex_only_widgets.append(self._r_encoding)
 
+        self._r_heading_font = _combo_row("Heading font", HEADING_FONT_LABELS)
+        self._r_heading_font.set_tooltip_text(
+            "Font applied to all headings via titlesec — overrides the citation-style heading preset. "
+            "'Custom font…' uses fontspec \\newfontfamily."
+        )
+        self._r_heading_font.connect("notify::selected", self._on_heading_font_changed)
+        grp2.add(self._r_heading_font)
+        self._latex_only_widgets.append(self._r_heading_font)
+
+        self._r_heading_font_name = _entry_row("Heading font name", "e.g. Alegreya Sans")
+        self._r_heading_font_name.set_tooltip_text(
+            "Font name as recognised by fontspec, e.g. 'Source Sans Pro' or 'Alegreya Sans'"
+        )
+        self._r_heading_font_name.connect("changed", lambda *_: self._dirty_preview())
+        self._r_heading_font_name.set_visible(False)
+        grp2.add(self._r_heading_font_name)
+        self._latex_only_widgets.append(self._r_heading_font_name)
+
         self._content_stack.add_named(scroll, "style")
 
     def _on_font_selected(self, *args):
@@ -1031,56 +1359,184 @@ class GostWindow(Adw.ApplicationWindow):
         grp = Adw.PreferencesGroup(title="Page Layout")
         box.append(grp)
 
-        paper_row = Adw.ActionRow(title="Paper size")
-        paper_row.set_tooltip_text(
-            "Sets the \\documentclass paper option and Typst page dimensions"
+        # Document Type (Article / Book) — LaTeX only, first in group so it's visible
+        doc_type_row = Adw.ActionRow(title="Document class")
+        doc_type_row.set_tooltip_text(
+            "Article uses extarticle with \\section{} headings; "
+            "Book uses extbook with \\chapter{} and \\frontmatter/\\mainmatter/\\backmatter"
         )
-        paper_box = Gtk.Box(spacing=4)
-        paper_box.set_valign(Gtk.Align.CENTER)
-        self._paper_btns: dict = {}
-        pg = None
-        for p, lbl in (("letterpaper", "Letter"), ("a4paper", "A4")):
-            btn = Gtk.ToggleButton(label=lbl)
+        dt_box = Gtk.Box(spacing=4)
+        dt_box.set_valign(Gtk.Align.CENTER)
+        self._doc_type_btns: dict = {}
+        dt_group = None
+        for dt_key, dt_label in (("article", "Article"), ("book", "Book")):
+            btn = Gtk.ToggleButton(label=dt_label)
             btn.add_css_class("flat")
-            if pg is None:
-                pg = btn
+            if dt_group is None:
+                dt_group = btn
             else:
-                btn.set_group(pg)
-            btn._paper_key = p
-            btn.connect("toggled", self._on_paper_toggled)
-            paper_box.append(btn)
-            self._paper_btns[p] = btn
-        self._paper_btns["letterpaper"].set_active(True)
-        paper_row.add_suffix(paper_box)
-        grp.add(paper_row)
+                btn.set_group(dt_group)
+            btn._dt_key = dt_key
+            btn.connect("toggled", self._on_doc_type_toggled)
+            dt_box.append(btn)
+            self._doc_type_btns[dt_key] = btn
+        self._doc_type_btns["article"].set_active(True)
+        doc_type_row.add_suffix(dt_box)
+        grp.add(doc_type_row)
+        self._latex_only_widgets.append(doc_type_row)
 
-        self._r_margin = _spin_row("Margin (inches)", 0.5, 3.0, 0.25, 1.0)
+        # Paper size — combo with standard sizes + Custom
+        _paper_labels = [lbl for _, lbl in PAPER_OPTIONS]
+        _paper_keys   = [k   for k, _  in PAPER_OPTIONS]
+        self._r_paper_combo = _combo_row("Paper size", _paper_labels)
+        self._r_paper_combo.set_tooltip_text(
+            "Sets the document class paper option and Typst page dimensions"
+        )
+        _init_paper_idx = _paper_keys.index(self._paper) if self._paper in _paper_keys else 0
+        self._r_paper_combo.set_selected(_init_paper_idx)
+        self._r_paper_combo.connect("notify::selected", self._on_paper_selected)
+        grp.add(self._r_paper_combo)
+
+        # Custom paper dimensions (revealed only when Custom is chosen)
+        self._r_paper_w = _spin_row("Width (mm)", 50, 1200, 1, 210)
+        self._r_paper_w.set_tooltip_text("Custom page width in millimetres")
+        self._r_paper_w.connect("notify::value", lambda *_: self._dirty_preview())
+        grp.add(self._r_paper_w)
+
+        self._r_paper_h = _spin_row("Height (mm)", 50, 1200, 1, 297)
+        self._r_paper_h.set_tooltip_text("Custom page height in millimetres")
+        self._r_paper_h.connect("notify::value", lambda *_: self._dirty_preview())
+        grp.add(self._r_paper_h)
+
+        _custom = self._paper == "custom"
+        self._r_paper_w.set_visible(_custom)
+        self._r_paper_h.set_visible(_custom)
+
+        # Units toggle (in / mm) — affects all margin spin rows
+        units_row = Adw.ActionRow(title="Margin units")
+        units_row.set_tooltip_text("Display and enter margins in inches or millimetres")
+        units_box = Gtk.Box(spacing=4)
+        units_box.set_valign(Gtk.Align.CENTER)
+        self._unit_btns: dict = {}
+        ug = None
+        for u_key, u_lbl in (("in", "in"), ("mm", "mm")):
+            btn = Gtk.ToggleButton(label=u_lbl)
+            btn.add_css_class("flat")
+            if ug is None:
+                ug = btn
+            else:
+                btn.set_group(ug)
+            btn._unit_key = u_key
+            btn.connect("toggled", self._on_unit_toggled)
+            units_box.append(btn)
+            self._unit_btns[u_key] = btn
+        self._unit_btns[self._unit].set_active(True)
+        units_row.add_suffix(units_box)
+        grp.add(units_row)
+
+        # Margin spin rows — initial values converted to current unit
+        _init_margin_val  = 1.0  * (25.4 if self._unit == "mm" else 1)
+        _init_inner_val   = 1.5  * (25.4 if self._unit == "mm" else 1)
+        _init_outer_val   = 1.0  * (25.4 if self._unit == "mm" else 1)
+        _m_lo, _m_hi, _m_step, _m_dig = (
+            (10.0, 80.0, 1.0, 0) if self._unit == "mm" else (0.5, 3.0, 0.25, 2)
+        )
+        _b_lo, _b_hi, _b_step, _b_dig = (
+            (10.0, 100.0, 1.0, 0) if self._unit == "mm" else (0.5, 4.0, 0.25, 2)
+        )
+
+        self._r_margin = _spin_row("Margin", _m_lo, _m_hi, _m_step, _init_margin_val)
+        self._r_margin.set_digits(_m_dig)
         self._r_margin.set_tooltip_text(
-            "Page margin in inches, applied to all four sides via the geometry package"
+            "Uniform page margin — hidden when binding gutter is on"
         )
         self._r_margin.connect("notify::value", lambda *_: self._dirty_preview())
         grp.add(self._r_margin)
 
-        fs_row = Adw.ActionRow(title="Font size")
-        fs_row.set_tooltip_text("Base font size for body text")
-        fs_box = Gtk.Box(spacing=4)
-        fs_box.set_valign(Gtk.Align.CENTER)
-        self._fs_btns: dict = {}
-        fg = None
-        for s in ("10pt", "11pt", "12pt"):
-            btn = Gtk.ToggleButton(label=s)
-            btn.add_css_class("flat")
-            if fg is None:
-                fg = btn
-            else:
-                btn.set_group(fg)
-            btn._fs_key = s
-            btn.connect("toggled", self._on_fs_toggled)
-            fs_box.append(btn)
-            self._fs_btns[s] = btn
-        self._fs_btns["11pt"].set_active(True)
-        fs_row.add_suffix(fs_box)
-        grp.add(fs_row)
+        self._r_twoside = _switch_row(
+            "Binding gutter (twoside)",
+            "Asymmetric inner/outer margins for double-sided printing and binding"
+        )
+        self._r_twoside.set_tooltip_text(
+            "Enables twoside layout: inner margin is wider (binding side), "
+            "outer margin is narrower — pages alternate so the gutter is always correct"
+        )
+        self._r_twoside.connect("notify::active", self._on_twoside_toggled)
+        grp.add(self._r_twoside)
+
+        self._r_inner_margin = _spin_row("Inner margin", _b_lo, _b_hi, _b_step, _init_inner_val)
+        self._r_inner_margin.set_digits(_b_dig)
+        self._r_inner_margin.set_tooltip_text(
+            "Binding-side margin — add extra here for the glue/staple area"
+        )
+        self._r_inner_margin.connect("notify::value", lambda *_: self._dirty_preview())
+        grp.add(self._r_inner_margin)
+        self._r_inner_margin.set_visible(False)
+
+        self._r_outer_margin = _spin_row("Outer margin", _b_lo, _b_hi, _b_step, _init_outer_val)
+        self._r_outer_margin.set_digits(_b_dig)
+        self._r_outer_margin.set_tooltip_text("Outside-edge margin")
+        self._r_outer_margin.connect("notify::value", lambda *_: self._dirty_preview())
+        grp.add(self._r_outer_margin)
+        self._r_outer_margin.set_visible(False)
+
+        self._r_open_right = _switch_row(
+            "Chapters start on right-hand page",
+            "Adds openright to \\documentclass; book mode only (LaTeX)"
+        )
+        self._r_open_right.set_tooltip_text(
+            "Each chapter begins on an odd (recto) page — standard in commercially published books. "
+            "Inserts a blank verso page when needed."
+        )
+        self._r_open_right.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_open_right)
+        self._latex_only_widgets.append(self._r_open_right)
+
+        self._r_empty_blank_pages = _switch_row(
+            "Empty blank verses",
+            "Inserted blank pages have no header, footer, or page number (LaTeX)"
+        )
+        self._r_empty_blank_pages.set_tooltip_text(
+            "Redefines \\cleardoublepage so auto-inserted blank pages are completely empty — "
+            "required for professional printing"
+        )
+        self._r_empty_blank_pages.connect("notify::active", lambda *_: self._dirty_preview())
+        grp.add(self._r_empty_blank_pages)
+        self._latex_only_widgets.append(self._r_empty_blank_pages)
+
+        self._r_bleed_enabled = _switch_row(
+            "Print-ready bleed + crop marks",
+            "Expands paper by bleed margin; adds printer's crop marks (LaTeX)"
+        )
+        self._r_bleed_enabled.set_tooltip_text(
+            "Increases the PDF page size by the bleed amount and draws crop marks at the trim line — "
+            "required for professional offset and print-on-demand printing."
+        )
+        self._r_bleed_enabled.connect("notify::active", self._on_bleed_toggled)
+        grp.add(self._r_bleed_enabled)
+        self._latex_only_widgets.append(self._r_bleed_enabled)
+
+        self._r_bleed_mm = _spin_row("Bleed (mm)", 1, 10, 1, 3)
+        self._r_bleed_mm.set_tooltip_text(
+            "Bleed amount in millimetres — 3 mm is standard for most print-on-demand "
+            "and offset printing suppliers"
+        )
+        self._r_bleed_mm.connect("notify::value", lambda *_: self._dirty_preview())
+        self._r_bleed_mm.set_visible(False)
+        grp.add(self._r_bleed_mm)
+        self._latex_only_widgets.append(self._r_bleed_mm)
+
+        # Font size — combo with all extarticle/extbook sizes
+        self._r_font_size_combo = _combo_row("Font size", FONT_SIZE_OPTIONS)
+        self._r_font_size_combo.set_tooltip_text(
+            "Base font size for body text — extarticle/extbook supports 8 pt through 20 pt"
+        )
+        _init_fs_idx = (FONT_SIZE_OPTIONS.index(self._font_size)
+                        if self._font_size in FONT_SIZE_OPTIONS
+                        else FONT_SIZE_OPTIONS.index("11pt"))
+        self._r_font_size_combo.set_selected(_init_fs_idx)
+        self._r_font_size_combo.connect("notify::selected", self._on_fs_selected)
+        grp.add(self._r_font_size_combo)
 
         self._r_linespace = _combo_row("Line spacing", ["Single", "1.5×", "Double"])
         self._r_linespace.set_tooltip_text(
@@ -1121,6 +1577,18 @@ class GostWindow(Adw.ApplicationWindow):
 
         grp3 = Adw.PreferencesGroup(title="Paragraph Style")
         box.append(grp3)
+
+        self._r_widow_orphan = _combo_row(
+            "Widow/orphan control",
+            ["Relaxed (LaTeX default)", "Standard (penalty 1000)", "Strict (penalty 10000)"]
+        )
+        self._r_widow_orphan.set_tooltip_text(
+            "Widows: single lines stranded at top of page; orphans: at bottom. "
+            "Strict prevents them entirely by allowing extra inter-paragraph whitespace."
+        )
+        self._r_widow_orphan.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp3.add(self._r_widow_orphan)
+        self._latex_only_widgets.append(self._r_widow_orphan)
 
         self._r_parindent = _spin_row("Paragraph indent (em)", 0, 4, 0.5, 1.5)
         self._r_parindent.set_tooltip_text("First-line indent at the start of each paragraph in em units")
@@ -1234,7 +1702,7 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_header_style.set_tooltip_text(
             "What appears in the running header above each page"
         )
-        self._r_header_style.connect("notify::selected", lambda *_: self._dirty_preview())
+        self._r_header_style.connect("notify::selected", self._on_header_style_changed)
         grp.add(self._r_header_style)
 
         self._r_header_rule = _switch_row(
@@ -1257,6 +1725,52 @@ class GostWindow(Adw.ApplicationWindow):
         self._r_suppress_first.set_active(True)
         self._r_suppress_first.connect("notify::active", lambda *_: self._dirty_preview())
         grp.add(self._r_suppress_first)
+
+        self._r_footer_style = _combo_row("Footer page numbers", FOOTER_STYLE_LABELS)
+        self._r_footer_style.set_tooltip_text(
+            "Add page numbers in the footer (independent of the header style above). "
+            "'Outer' places them at the outside edge — standard in two-sided book printing."
+        )
+        self._r_footer_style.connect("notify::selected", lambda *_: self._dirty_preview())
+        grp.add(self._r_footer_style)
+        self._latex_only_widgets.append(self._r_footer_style)
+
+        # Custom verso/recto header content (visible only when custom_recto_verso is selected)
+        self._custom_header_grp = Adw.PreferencesGroup(
+            title="Custom Header Positions",
+            description=(
+                "Choose what appears in each position. "
+                "Verso = left (even) page; Recto = right (odd) page. "
+                "In book class, Chapter = \\leftmark (chapter title), Section = \\rightmark."
+            )
+        )
+        self._custom_header_grp.set_visible(False)
+        box.append(self._custom_header_grp)
+        self._latex_only_widgets.append(self._custom_header_grp)
+
+        self._r_header_le = _combo_row("Verso left  [LE]", HEADER_CONTENT_LABELS)
+        self._r_header_le.set_tooltip_text("Left position on even (left-hand / verso) pages")
+        self._r_header_le.set_selected(1)  # page number
+        self._r_header_le.connect("notify::selected", lambda *_: self._dirty_preview())
+        self._custom_header_grp.add(self._r_header_le)
+
+        self._r_header_re = _combo_row("Verso right  [RE]", HEADER_CONTENT_LABELS)
+        self._r_header_re.set_tooltip_text("Right position on even (left-hand / verso) pages")
+        self._r_header_re.set_selected(2)  # chapter
+        self._r_header_re.connect("notify::selected", lambda *_: self._dirty_preview())
+        self._custom_header_grp.add(self._r_header_re)
+
+        self._r_header_lo = _combo_row("Recto left  [LO]", HEADER_CONTENT_LABELS)
+        self._r_header_lo.set_tooltip_text("Left position on odd (right-hand / recto) pages")
+        self._r_header_lo.set_selected(2)  # chapter
+        self._r_header_lo.connect("notify::selected", lambda *_: self._dirty_preview())
+        self._custom_header_grp.add(self._r_header_lo)
+
+        self._r_header_ro = _combo_row("Recto right  [RO]", HEADER_CONTENT_LABELS)
+        self._r_header_ro.set_tooltip_text("Right position on odd (right-hand / recto) pages")
+        self._r_header_ro.set_selected(1)  # page number
+        self._r_header_ro.connect("notify::selected", lambda *_: self._dirty_preview())
+        self._custom_header_grp.add(self._r_header_ro)
 
         self._content_stack.add_named(scroll, "headers")
 
@@ -1711,6 +2225,10 @@ class GostWindow(Adw.ApplicationWindow):
     # State extraction
     # ------------------------------------------------------------------
 
+    def _margin_to_in(self, val: float) -> str:
+        v = val / 25.4 if self._unit == "mm" else val
+        return "{:.3f}".format(v)
+
     def _notes_index_to_str(self, idx):
         return ["footnote", "endnote", "none"][idx]
 
@@ -1753,9 +2271,16 @@ class GostWindow(Adw.ApplicationWindow):
             "engine":             self._engine,
             "encoding":           ["utf8", "latin1"][self._r_encoding.get_selected()],
 
+            "doc_type":     next((k for k, b in self._doc_type_btns.items() if b.get_active()), "article"),
             "paper":        self._paper,
+            "paper_w_mm":   int(self._r_paper_w.get_value()) if hasattr(self, "_r_paper_w") else 210,
+            "paper_h_mm":   int(self._r_paper_h.get_value()) if hasattr(self, "_r_paper_h") else 297,
             "font_size":    self._font_size,
-            "margin":       str(self._r_margin.get_value()),
+            "twoside":      self._r_twoside.get_active() if hasattr(self, "_r_twoside") else False,
+            "inner_margin": self._margin_to_in(self._r_inner_margin.get_value()) if hasattr(self, "_r_inner_margin") else "1.50",
+            "outer_margin": self._margin_to_in(self._r_outer_margin.get_value()) if hasattr(self, "_r_outer_margin") else "1.00",
+            "margin":       self._margin_to_in(self._r_margin.get_value()),
+            "margin_unit":  self._unit,
             "linespace":    self._linespace_index_to_str(self._r_linespace.get_selected()),
             "parindent":    str(self._r_parindent.get_value()),
             "parskip":      str(int(self._r_parskip.get_value())),
@@ -1768,6 +2293,33 @@ class GostWindow(Adw.ApplicationWindow):
             "header_style":         HEADER_STYLE_KEYS[hs_idx] if hs_idx < len(HEADER_STYLE_KEYS) else "auto",
             "header_rule":          self._r_header_rule.get_active(),
             "suppress_first_header": self._r_suppress_first.get_active(),
+            "header_le": HEADER_CONTENT_KEYS[self._r_header_le.get_selected()] if hasattr(self, "_r_header_le") else "pagenum",
+            "header_re": HEADER_CONTENT_KEYS[self._r_header_re.get_selected()] if hasattr(self, "_r_header_re") else "chapter",
+            "header_lo": HEADER_CONTENT_KEYS[self._r_header_lo.get_selected()] if hasattr(self, "_r_header_lo") else "chapter",
+            "header_ro": HEADER_CONTENT_KEYS[self._r_header_ro.get_selected()] if hasattr(self, "_r_header_ro") else "pagenum",
+
+            "open_right":         self._r_open_right.get_active() if hasattr(self, "_r_open_right") else False,
+            "bleed_enabled":      self._r_bleed_enabled.get_active() if hasattr(self, "_r_bleed_enabled") else False,
+            "bleed_mm":           int(self._r_bleed_mm.get_value()) if hasattr(self, "_r_bleed_mm") else 3,
+            "chapter_style":      ["full", "numbered", "title_only"][self._r_chapter_style.get_selected()] if hasattr(self, "_r_chapter_style") else "full",
+            "widow_orphan":       ["relaxed", "standard", "strict"][self._r_widow_orphan.get_selected()] if hasattr(self, "_r_widow_orphan") else "relaxed",
+            "has_half_title":     self._r_has_half_title.get_active() if hasattr(self, "_r_has_half_title") else False,
+            "has_copyright_page": self._r_has_copyright_page.get_active() if hasattr(self, "_r_has_copyright_page") else False,
+            "has_dedication":     self._r_has_dedication.get_active() if hasattr(self, "_r_has_dedication") else False,
+            "dedication_text":    self._r_dedication_text.get_text() if hasattr(self, "_r_dedication_text") else "",
+            "has_lof":            self._r_has_lof.get_active() if hasattr(self, "_r_has_lof") else False,
+            "has_lot":            self._r_has_lot.get_active() if hasattr(self, "_r_has_lot") else False,
+            "has_index":          self._r_has_index.get_active() if hasattr(self, "_r_has_index") else False,
+            "has_colophon":       self._r_has_colophon.get_active() if hasattr(self, "_r_has_colophon") else False,
+            "colophon_text":      self._r_colophon_text.get_text() if hasattr(self, "_r_colophon_text") else "",
+            "empty_blank_pages":  self._r_empty_blank_pages.get_active() if hasattr(self, "_r_empty_blank_pages") else False,
+            "footer_style":       FOOTER_STYLE_KEYS[self._r_footer_style.get_selected()] if hasattr(self, "_r_footer_style") else "none",
+            "chapter_dropcap":    self._r_chapter_dropcap.get_active() if hasattr(self, "_r_chapter_dropcap") else False,
+            "chapter_epigraph":   self._r_chapter_epigraph.get_active() if hasattr(self, "_r_chapter_epigraph") else False,
+            "heading_font":       HEADING_FONT_KEYS[self._r_heading_font.get_selected()] if hasattr(self, "_r_heading_font") else "none",
+            "heading_font_name":  self._r_heading_font_name.get_text() if hasattr(self, "_r_heading_font_name") else "",
+            "footnote_style":     FOOTNOTE_STYLE_KEYS[self._r_footnote_style.get_selected()] if hasattr(self, "_r_footnote_style") else "default",
+            "part_title_style":   PART_TITLE_STYLE_KEYS[self._r_part_title_style.get_selected()] if hasattr(self, "_r_part_title_style") else "plain",
 
             "bib_file":    self._r_bib_file.get_text(),
             "bib_sort":    self._bib_sort_index_to_str(self._r_bib_sort.get_selected()),
@@ -1837,14 +2389,19 @@ class GostWindow(Adw.ApplicationWindow):
                 if opt["key"] == p["font_pkg"]:
                     self._r_font_pkg.set_selected(i)
                     break
-        if hasattr(self, "_fs_btns") and p["font_size"] in self._fs_btns:
-            self._fs_btns[p["font_size"]].set_active(True)
-        if hasattr(self, "_paper_btns") and p["paper"] in self._paper_btns:
-            self._paper_btns[p["paper"]].set_active(True)
+        if hasattr(self, "_r_font_size_combo") and p["font_size"] in FONT_SIZE_OPTIONS:
+            self._r_font_size_combo.set_selected(FONT_SIZE_OPTIONS.index(p["font_size"]))
+            self._font_size = p["font_size"]
+        if hasattr(self, "_r_paper_combo"):
+            paper_keys = [k for k, _ in PAPER_OPTIONS]
+            if p["paper"] in paper_keys:
+                self._r_paper_combo.set_selected(paper_keys.index(p["paper"]))
+                self._paper = p["paper"]
         if hasattr(self, "_r_linespace"):
             self._r_linespace.set_selected({"1": 0, "1.5": 1, "2": 2}.get(p["linespace"], 2))
         if hasattr(self, "_r_margin"):
-            self._r_margin.set_value(p["margin"])
+            v = float(p["margin"]) * (25.4 if self._unit == "mm" else 1.0)
+            self._r_margin.set_value(v)
         if hasattr(self, "_r_parindent"):
             self._r_parindent.set_value(p["parindent"])
         if hasattr(self, "_r_numbered"):
@@ -1856,27 +2413,107 @@ class GostWindow(Adw.ApplicationWindow):
             self._r_cite_cmd.set_selected(
                 {"autocite": 0, "footcite": 1, "parencite": 2, "cite": 3}.get(p["cite_cmd"], 0))
 
+    def _on_doc_type_toggled(self, btn):
+        if btn.get_active():
+            if hasattr(self, "_sb_book_btn"):
+                self._sb_book_btn.handler_block_by_func(self._on_sb_book_toggled)
+                self._sb_book_btn.set_active(btn._dt_key == "book")
+                self._sb_book_btn.handler_unblock_by_func(self._on_sb_book_toggled)
+            self._dirty_preview()
+
+    def _on_unit_toggled(self, btn):
+        if not btn.get_active():
+            return
+        new_unit = btn._unit_key
+        if new_unit == self._unit:
+            return
+        to_mm = new_unit == "mm"
+        factor = 25.4 if to_mm else (1.0 / 25.4)
+
+        m_lo, m_hi, m_step, m_dig = (10.0, 80.0,  1.0, 0) if to_mm else (0.5, 3.0,  0.25, 2)
+        b_lo, b_hi, b_step, b_dig = (10.0, 100.0, 1.0, 0) if to_mm else (0.5, 4.0,  0.25, 2)
+
+        for row, lo, hi, step, dig in [
+            (self._r_margin,       m_lo, m_hi, m_step, m_dig),
+            (self._r_inner_margin, b_lo, b_hi, b_step, b_dig),
+            (self._r_outer_margin, b_lo, b_hi, b_step, b_dig),
+        ]:
+            adj = row.get_adjustment()
+            new_val = round(adj.get_value() * factor, 1 if to_mm else 2)
+            adj.set_lower(lo);  adj.set_upper(hi)
+            adj.set_step_increment(step)
+            row.set_digits(dig)
+            adj.set_value(new_val)
+
+        self._unit = new_unit
+        self._config.set("margin_unit", new_unit)
+        self._dirty_preview()
+
+    def _on_twoside_toggled(self, row, _param):
+        on = row.get_active()
+        if hasattr(self, "_r_margin"):
+            self._r_margin.set_visible(not on)
+        if hasattr(self, "_r_inner_margin"):
+            self._r_inner_margin.set_visible(on)
+            self._r_outer_margin.set_visible(on)
+        self._dirty_preview()
+
     def _on_engine_toggled(self, btn):
         if btn.get_active():
             self._engine = btn._eng_key.lower()
             self._check_font_engine_compatibility()
             self._dirty_preview()
 
-    def _on_paper_toggled(self, btn):
-        if btn.get_active():
-            self._paper = btn._paper_key
-            self._dirty_preview()
+    def _on_paper_selected(self, combo, _param):
+        idx = combo.get_selected()
+        paper_keys = [k for k, _ in PAPER_OPTIONS]
+        if 0 <= idx < len(paper_keys):
+            self._paper = paper_keys[idx]
+        is_custom = self._paper == "custom"
+        if hasattr(self, "_r_paper_w"):
+            self._r_paper_w.set_visible(is_custom)
+            self._r_paper_h.set_visible(is_custom)
+        self._dirty_preview()
 
-    def _on_fs_toggled(self, btn):
-        if btn.get_active():
-            self._font_size = btn._fs_key
-            self._dirty_preview()
+    def _on_fs_selected(self, combo, _param):
+        idx = combo.get_selected()
+        if 0 <= idx < len(FONT_SIZE_OPTIONS):
+            self._font_size = FONT_SIZE_OPTIONS[idx]
+        self._dirty_preview()
 
     def _on_multicol_toggled(self, row, _):
         on = row.get_active()
         self._r_num_cols.set_sensitive(on)
         self._r_col_rule.set_sensitive(on)
         self._r_col_sep.set_sensitive(on)
+        self._dirty_preview()
+
+    def _on_bleed_toggled(self, row, _param):
+        self._r_bleed_mm.set_visible(row.get_active())
+        self._dirty_preview()
+
+    def _on_dedication_toggled(self, row, _param):
+        self._r_dedication_text.set_visible(row.get_active())
+        self._dirty_preview()
+
+    def _on_colophon_toggled(self, row, _param):
+        self._r_colophon_text.set_visible(row.get_active())
+        self._dirty_preview()
+
+    def _on_heading_font_changed(self, combo, _param):
+        idx = combo.get_selected()
+        key = HEADING_FONT_KEYS[idx] if idx < len(HEADING_FONT_KEYS) else "none"
+        if hasattr(self, "_r_heading_font_name"):
+            self._r_heading_font_name.set_visible(key == "custom" and self._format == "latex")
+        self._dirty_preview()
+
+    def _on_header_style_changed(self, combo, _param):
+        idx = combo.get_selected()
+        key = HEADER_STYLE_KEYS[idx] if idx < len(HEADER_STYLE_KEYS) else "auto"
+        if hasattr(self, "_custom_header_grp"):
+            self._custom_header_grp.set_visible(
+                key == "custom_recto_verso" and self._format == "latex"
+            )
         self._dirty_preview()
 
     def _on_format_toggled(self, btn):
@@ -2376,7 +3013,7 @@ class GostWindow(Adw.ApplicationWindow):
                     ch_src = gcf(ch_title)
                 else:
                     from essay_builder.texgen import generate_chapter_file as gcf
-                    ch_src = gcf(ch_title, cite_cmd)
+                    ch_src = gcf(ch_title, cite_cmd, state.get("doc_type", "article"))
                 with open(ch_path, "w", encoding="utf-8") as f:
                     f.write(ch_src)
 

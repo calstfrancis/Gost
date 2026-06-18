@@ -25,8 +25,12 @@ TYPST_FONTS: Dict[str, str | None] = {
 }
 
 TYPST_PAPER: Dict[str, str] = {
-    "letterpaper": "us-letter",
-    "a4paper":     "a4",
+    "letterpaper":    "us-letter",
+    "a4paper":        "a4",
+    "a5paper":        "a5",
+    "b5paper":        "iso-b5",
+    "legalpaper":     "us-legal",
+    "executivepaper": "us-executive",
 }
 
 TYPST_LEADING: Dict[str, str] = {
@@ -329,6 +333,10 @@ def generate(s: Dict[str, Any]) -> str:
     header_style    = s.get("header_style",   "auto")
     header_rule     = s.get("header_rule",    False)
 
+    twoside   = s.get("twoside",       False)
+    inner_m   = s.get("inner_margin",  "1.50")
+    outer_m   = s.get("outer_margin",  "1.00")
+
     bib_style  = s.get("typst_csl_style") or TYPST_CIT_STYLES.get(cit, "chicago-notes")
     font_name  = TYPST_FONTS.get(font_pkg)
     paper_name = TYPST_PAPER.get(paper, "us-letter")
@@ -368,8 +376,17 @@ def generate(s: Dict[str, Any]) -> str:
 
     # Page geometry + style-specific numbering
     L.append("#set page(")
-    L.append('  paper: "{}",'.format(paper_name))
-    L.append("  margin: {}in,".format(margin))
+    if paper == "custom":
+        pw = s.get("paper_w_mm", 210)
+        ph = s.get("paper_h_mm", 297)
+        L.append("  width: {}mm,".format(pw))
+        L.append("  height: {}mm,".format(ph))
+    else:
+        L.append('  paper: "{}",'.format(paper_name))
+    if twoside:
+        L.append("  margin: (inside: {}in, outside: {}in),".format(inner_m, outer_m))
+    else:
+        L.append("  margin: {}in,".format(margin))
     if cit in ("MLA", "APA", "ASA"):
         L.append('  numbering: "1",')
         L.append("  number-align: right + top,")

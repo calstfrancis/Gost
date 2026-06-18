@@ -9,6 +9,28 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple
 
+# When running inside a flatpak sandbox, host binaries are not in PATH.
+# We use flatpak-spawn --host to delegate compilation to the host system.
+# The flatpak manifest adds --filesystem=/tmp so temp files are shared.
+_IN_FLATPAK = bool(os.environ.get("FLATPAK_ID"))
+
+
+def _host_which(cmd: str) -> bool:
+    if _IN_FLATPAK:
+        try:
+            r = subprocess.run(["flatpak-spawn", "--host", "which", cmd],
+                               capture_output=True, timeout=5)
+            return r.returncode == 0
+        except Exception:
+            return False
+    return shutil.which(cmd) is not None
+
+
+def _run(cmd: list, **kwargs):
+    if _IN_FLATPAK:
+        cmd = ["flatpak-spawn", "--host"] + cmd
+    return subprocess.run(cmd, **kwargs)
+
 
 def _preview_pdf_path() -> str:
     d = Path.home() / ".cache" / "gost"
@@ -17,21 +39,20 @@ def _preview_pdf_path() -> str:
 
 
 def typst_available() -> bool:
-    return shutil.which("typst") is not None
+    return _host_which("typst")
 
 
 def latex_available() -> bool:
-    return shutil.which("latexmk") is not None
+    return _host_which("latexmk")
 
 
 def image_tools_available() -> bool:
-    return shutil.which("pdftoppm") is not None or shutil.which("convert") is not None
+    return _host_which("pdftoppm") or _host_which("convert")
 
 
 def compile_typst(source: str) -> Tuple[List[bytes], str]:
     """Return (page_png_list, error_str). On success error is empty."""
-    typst_bin = shutil.which("typst")
-    if not typst_bin:
+    if not _host_which("typst"):
         return [], "typst not found in PATH.\nInstall from https://typst.app or via your package manager."
 
     # Guarantee white page background for preview regardless of GTK theme.
@@ -40,14 +61,14 @@ def compile_typst(source: str) -> Tuple[List[bytes], str]:
     if "fill:" not in source:
         source = "#set page(fill: white)\n" + source
 
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(dir="/tmp") as d:
         src = os.path.join(d, "doc.typ")
         out = os.path.join(d, "doc.png")
         with open(src, "w", encoding="utf-8") as f:
             f.write(source)
         try:
-            r = subprocess.run(
-                [typst_bin, "compile", "--format", "png", src, out],
+            r = _run(
+                [_cmd("typst"), "compile", "--format", "png", src, out],
                 capture_output=True, text=True, timeout=20,
             )
         except subprocess.TimeoutExpired:
@@ -77,15 +98,21 @@ def compile_typst(source: str) -> Tuple[List[bytes], str]:
         return (pages, "") if pages else ([], "Compilation succeeded but no PNG output found.")
 
 
+def _cmd(name: str) -> str:
+    """Return command name for flatpak-spawn (just name) or full path for direct exec."""
+    if _IN_FLATPAK:
+        return name
+    return shutil.which(name) or name
+
+
 def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], str]:
     """Return (page_png_list, error_str)."""
-    latexmk = shutil.which("latexmk")
-    if not latexmk:
+    if not _host_which("latexmk"):
         return [], "latexmk not found.\nInstall TeX Live or MiKTeX."
 
-    pdftoppm = shutil.which("pdftoppm")
-    convert  = shutil.which("convert")
-    if not pdftoppm and not convert:
+    has_pdftoppm = _host_which("pdftoppm")
+    has_convert  = _host_which("convert")
+    if not has_pdftoppm and not has_convert:
         return [], (
             "Image converter not found.\n"
             "Install poppler-tools (pdftoppm) or ImageMagick (convert)."
@@ -97,14 +124,14 @@ def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], st
         "lualatex": "-lualatex",
     }.get(engine, "-xelatex")
 
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(dir="/tmp") as d:
         src = os.path.join(d, "doc.tex")
         pdf = os.path.join(d, "doc.pdf")
         with open(src, "w", encoding="utf-8") as f:
             f.write(source)
         try:
-            r = subprocess.run(
-                [latexmk, flag, "-interaction=nonstopmode",
+            r = _run(
+                [_cmd("latexmk"), flag, "-interaction=nonstopmode",
                  "-output-directory", d, src],
                 capture_output=True, text=True, timeout=60, cwd=d,
             )
@@ -119,11 +146,11 @@ def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], st
 
         pages: List[bytes] = []
 
-        if pdftoppm:
+        if has_pdftoppm:
             pfx = os.path.join(d, "pg")
             try:
-                subprocess.run(
-                    [pdftoppm, "-r", "150", "-png", pdf, pfx],
+                _run(
+                    [_cmd("pdftoppm"), "-r", "150", "-png", pdf, pfx],
                     check=True, capture_output=True, timeout=30,
                 )
                 i = 1
@@ -143,11 +170,11 @@ def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], st
             except Exception:
                 pass
 
-        if not pages and convert:
+        if not pages and has_convert:
             pat = os.path.join(d, "pg-%d.png")
             try:
-                subprocess.run(
-                    [convert, "-density", "150", pdf, pat],
+                _run(
+                    [_cmd("convert"), "-density", "150", pdf, pat],
                     check=True, capture_output=True, timeout=30,
                 )
                 i = 0
@@ -171,20 +198,19 @@ def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], st
 
 def compile_typst_to_pdf(source: str) -> Tuple[str, str]:
     """Compile Typst source to PDF. Returns (pdf_path, error_str)."""
-    typst_bin = shutil.which("typst")
-    if not typst_bin:
+    if not _host_which("typst"):
         return "", "typst not found in PATH.\nInstall from https://typst.app."
 
     if "fill:" not in source:
         source = "#set page(fill: white)\n" + source
 
     pdf_path = _preview_pdf_path()
-    tmp = tempfile.NamedTemporaryFile(suffix=".typ", mode="w", encoding="utf-8", delete=False)
+    tmp = tempfile.NamedTemporaryFile(suffix=".typ", dir="/tmp", mode="w", encoding="utf-8", delete=False)
     try:
         tmp.write(source)
         tmp.close()
-        r = subprocess.run(
-            [typst_bin, "compile", tmp.name, pdf_path],
+        r = _run(
+            [_cmd("typst"), "compile", tmp.name, pdf_path],
             capture_output=True, text=True, timeout=20,
         )
         if r.returncode != 0:
@@ -203,8 +229,7 @@ def compile_typst_to_pdf(source: str) -> Tuple[str, str]:
 
 def compile_latex_to_pdf(source: str, engine: str = "xelatex") -> Tuple[str, str]:
     """Compile LaTeX source to PDF via latexmk. Returns (pdf_path, error_str)."""
-    latexmk = shutil.which("latexmk")
-    if not latexmk:
+    if not _host_which("latexmk"):
         return "", "latexmk not found.\nInstall TeX Live or MiKTeX."
 
     flag = {
@@ -213,14 +238,14 @@ def compile_latex_to_pdf(source: str, engine: str = "xelatex") -> Tuple[str, str
         "lualatex": "-lualatex",
     }.get(engine, "-xelatex")
 
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(dir="/tmp") as d:
         src = os.path.join(d, "doc.tex")
         pdf = os.path.join(d, "doc.pdf")
         with open(src, "w", encoding="utf-8") as f:
             f.write(source)
         try:
-            r = subprocess.run(
-                [latexmk, flag, "-interaction=nonstopmode",
+            r = _run(
+                [_cmd("latexmk"), flag, "-interaction=nonstopmode",
                  "-output-directory", d, src],
                 capture_output=True, text=True, timeout=60, cwd=d,
             )

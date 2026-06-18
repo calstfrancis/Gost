@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ca.calstfrancis.Gost</id>
+  <name>Gost</name>
+  <summary>Academic essay templater for LaTeX and Typst</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Gost generates fully formatted LaTeX and Typst templates for academic
+      essays and book manuscripts. Choose a citation style (SBL, Chicago,
+      MLA, APA, ASA, Turabian, or Harvard), set your margins, font, and
+      spacing, then export a ready-to-compile document.
+    </p>
+    <p>
+      Features include live compiled preview, Word (.docx) export, book
+      publishing layout (bleed, crop marks, openright chapters, running
+      headers), journal template importer, grammar check via LanguageTool,
+      and template profiles.
+    </p>
+  </description>
+  <launchable type="desktop-id">ca.calstfrancis.Gost.desktop</launchable>
+  <url type="homepage">https://github.com/calstfrancis/gost</url>
+  <url type="bugtracker">https://github.com/calstfrancis/gost/issues</url>
+  <developer_name>Cal St Francis</developer_name>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main window showing citation style selector and layout options</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.11-dev1" date="2026-06-17">
+      <description>
+        <p>Development build: flatpak packaging, statusbar, and comprehensive book publishing features.</p>
+      </description>
+    </release>
+    <release version="0.1.10" date="2026-06-06">
+      <description>
+        <p>GitHub Actions release workflow; DEB and RPM packages.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.1.11-dev1] – Flatpak, statusbar, book publishing layout, per-page headers
+
+### Added
+- **Flatpak packaging** — `ca.calstfrancis.Gost.yml` manifest, `dev-build.sh`, `publish-flatpak.sh`, and `flatpak-gen-sources.sh`. Bundles python-docx offline; LaTeX/Typst compilers are called via `flatpak-spawn --host` so the sandbox stays small.
+- **Status bar** — new bottom bar (libadwaita `ToolbarView`) with GOST Type B toggle and Book mode toggle on the left, and a version button (opens About / release notes) on the right. Mirrors Rubric's layout.
+- **Book document class** — Layout panel now has an Article / Book toggle (LaTeX only). Book mode uses `extbook` with `\frontmatter` / `\mainmatter` / `\backmatter` structure and promotes top-level headings to `\chapter{}`. Multi-file project export also writes `\chapter{}` stubs in book mode.
+- **More paper sizes** — Paper size is now a combo row with Letter, A4, A5, B5, Legal, Executive, and **Custom**. Custom reveals width/height fields (in mm); works in both LaTeX and Typst.
+- **More font sizes** — Font size is now a combo row with all `extarticle`/`extbook` sizes: 8 pt, 9 pt, 10 pt, 11 pt, 12 pt, 14 pt, 17 pt, 20 pt.
+- **Binding gutter / twoside** — "Binding gutter (twoside)" switch in Layout & Spacing replaces the uniform margin with separate inner and outer margin fields. Adds `twoside` to `\documentclass`, uses `inner=/outer=` in the geometry package, and `margin: (inside:, outside:)` in Typst. Works for both article and book.
+- **Metric/imperial margin units** — "in / mm" toggle in the Page Layout group converts all margin spin rows between inches and millimetres in place. Generators always receive inch values internally; the preference is saved between sessions.
+- **Recto chapter openings** — "Chapters start on right-hand page" switch adds `openright` to `\documentclass` (book mode); LaTeX inserts a blank verso page before each chapter as needed.
+- **Print-ready bleed + crop marks** — "Bleed + crop marks" switch with a bleed mm spin. Expands the PDF paper by the bleed amount on all sides, uses geometry's `layoutwidth/layoutheight/layouthoffset` to keep content centred, and adds `\usepackage{crop}` with `cam` marks at the trim line.
+- **Chapter label style** — Combo in Style panel (book mode, LaTeX): default `CHAPTER N / Title`, compact `N. Title`, or `Title only` (no number, via titlesec `\titleformat{\chapter}`).
+- **Widow/orphan control** — Combo in Paragraph Style group: Relaxed (default), Standard (`\clubpenalty=\widowpenalty=1000`), or Strict (10000, also sets `\displaywidowpenalty`).
+- **Front matter pages** — Three switches in the Metadata panel (LaTeX book mode): **Half-title page** (recto with book title only before title page), **Copyright page** (verso with `©`, year, author, ISBN placeholder), **Dedication page** (centred italic text, with a dedicated text-entry field).
+- **Book-standard header** — New header style "Book standard (author verso, chapter recto)": author last name on verso right `[RE]`, `\leftmark` (chapter) on recto left `[LO]`, page numbers on the outer edge.
+- **Custom per-position headers** — New header style "Custom (choose per-position content)" reveals a panel with four combos — Verso left `[LE]`, Verso right `[RE]`, Recto left `[LO]`, Recto right `[RO]` — each offering: Empty / Page number / Chapter (`\leftmark`) / Section (`\rightmark`) / Author / Book title.
+- **Footer page numbers** — "Footer page numbers" combo in Headers panel (independent of header style): None / Bottom centre / Bottom outer (`[LE,RO]`). Outer is the standard book layout. Works alongside any header style; loads fancyhdr automatically if not already active.
+- **Empty blank verses** — Switch in Layout panel: redefines `\cleardoublepage` so auto-inserted blank pages (from `openright`) are completely empty — no header, footer, or page number. Required for professional printing.
+- **Heading font pairing** — "Heading font" combo in Font & Encoding: Same as body (default) / Sans-serif (`\sffamily`) / Custom font (fontspec `\newfontfamily`). Overrides titlesec `\titleformat` for all heading levels including chapter.
+- **Footnote style** — "Footnote numbering" combo in Style panel: Document default (1, 2, 3…) / Restart per page (`perpage` package) / Symbols (*, †, ‡, §, ¶).
+- **Part title page style** — "Part title page style" combo in Style panel (book mode): Plain (default) / Full-page centred / Centred with rule (horizontal rule below title). Uses titlesec `\titleformat{\part}`.
+- **Drop cap at chapter opening** — Switch in Style panel: auto-injects `\lettrine[lines=3]{F}{}` stub into each chapter body, ready for the user to fill in. Loads `lettrine` if not already in Extra Packages.
+- **Chapter epigraph stubs** — Switch in Style panel: injects `\epigraph{Quote text here.}{--- Attribution}` below each chapter heading. Works with the epigraph package.
+- **List of figures / list of tables** — Two switches in the Front Matter section of the Metadata panel: insert `\listoffigures` / `\listoftables` after `\tableofcontents` (both article and book).
+- **Index** — Switch in the new Back Matter section: loads `imakeidx` with `\makeindex` in the preamble and inserts `\printindex` in the backmatter.
+- **Colophon page** — Switch in Back Matter: inserts a closing page with centred italic text. Defaults to "Typeset in [current font] using LaTeX"; editable via a text entry that appears when the switch is on.
+
+---
+
 ## [0.1.10] – 2026-06-06
 
 ### Added
