@@ -12,8 +12,15 @@ if [[ -z "$FPG" ]]; then
 fi
 
 echo "Generating python3-deps.json from requirements-flatpak.txt …"
+# Run without set -e catching the exit code: the tool saves the file before
+# exiting, but a known pipx bug causes a post-save ImportError (exit 1).
 "$FPG" \
     --runtime org.gnome.Sdk//47 \
     --output python3-deps \
-    $(cat requirements-flatpak.txt | grep -v '^#' | tr '\n' ' ')
+    $(cat requirements-flatpak.txt | grep -v '^#' | tr '\n' ' ') || true
+
+if [[ ! -f python3-deps.json ]]; then
+    echo "ERROR: python3-deps.json was not created."
+    exit 1
+fi
 echo "Done: python3-deps.json"
