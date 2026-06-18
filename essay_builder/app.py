@@ -154,6 +154,8 @@ class GostApp(Adw.Application):
 
 
 def _ensure_desktop_integration() -> None:
+    if os.environ.get("FLATPAK_ID"):
+        return
     desktop = Path.home() / ".local/share/applications/ca.calstfrancis.Gost.desktop"
     if desktop.exists():
         return
