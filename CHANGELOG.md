@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12-dev1] – dev
+
+### Changed
+- Book mode toggle moved to status bar; untoggling returns to article mode and the sidebar switch is removed.
+
+---
+
 ## [0.1.11] – 2026-06-18 — Flatpak, statusbar, book publishing layout, per-page headers
 
 ### Added
