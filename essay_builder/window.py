@@ -538,14 +538,11 @@ class GostWindow(Adw.ApplicationWindow):
         self._set_gost_font(btn.get_active())
 
     def _on_sb_book_toggled(self, btn):
-        if not hasattr(self, "_doc_type_btns"):
-            return
-        book = btn.get_active()
-        key = "book" if book else "article"
-        self._doc_type_btns[key].set_active(True)
-        if book:
+        self._doc_type = "book" if btn.get_active() else "article"
+        if btn.get_active():
             self._fmt_btns["latex"].set_active(True)
             self._nav_select("layout")
+        self._dirty_preview()
 
     # ------------------------------------------------------------------
     # Live preview pane
@@ -810,8 +807,11 @@ class GostWindow(Adw.ApplicationWindow):
             0 if s.get("typst_notes", "footnote") == "footnote" else 1)
 
         dt = s.get("doc_type", "article")
-        if hasattr(self, "_doc_type_btns") and dt in self._doc_type_btns:
-            self._doc_type_btns[dt].set_active(True)
+        self._doc_type = dt
+        if hasattr(self, "_sb_book_btn"):
+            self._sb_book_btn.handler_block_by_func(self._on_sb_book_toggled)
+            self._sb_book_btn.set_active(dt == "book")
+            self._sb_book_btn.handler_unblock_by_func(self._on_sb_book_toggled)
 
         eng_label = {"pdflatex": "pdfLaTeX", "xelatex": "XeLaTeX", "lualatex": "LuaLaTeX"}.get(
             s.get("engine", "xelatex"), "XeLaTeX")
@@ -1337,20 +1337,8 @@ class GostWindow(Adw.ApplicationWindow):
         grp = Adw.PreferencesGroup(title="Page Layout")
         box.append(grp)
 
-        # Doc type state (Article / Book) — controlled by the statusbar Book toggle.
-        # Buttons are kept off-screen for radio-group logic and state save/restore.
-        self._doc_type_btns: dict = {}
-        dt_group = None
-        for dt_key in ("article", "book"):
-            btn = Gtk.ToggleButton()
-            if dt_group is None:
-                dt_group = btn
-            else:
-                btn.set_group(dt_group)
-            btn._dt_key = dt_key
-            btn.connect("toggled", self._on_doc_type_toggled)
-            self._doc_type_btns[dt_key] = btn
-        self._doc_type_btns["article"].set_active(True)
+        # Doc type is tracked as a plain string; the statusbar Book toggle is the sole control.
+        self._doc_type = "article"
 
         # Paper size — combo with standard sizes + Custom
         _paper_labels = [lbl for _, lbl in PAPER_OPTIONS]
@@ -2240,7 +2228,7 @@ class GostWindow(Adw.ApplicationWindow):
             "engine":             self._engine,
             "encoding":           ["utf8", "latin1"][self._r_encoding.get_selected()],
 
-            "doc_type":     next((k for k, b in self._doc_type_btns.items() if b.get_active()), "article"),
+            "doc_type":     self._doc_type,
             "paper":        self._paper,
             "paper_w_mm":   int(self._r_paper_w.get_value()) if hasattr(self, "_r_paper_w") else 210,
             "paper_h_mm":   int(self._r_paper_h.get_value()) if hasattr(self, "_r_paper_h") else 297,
@@ -2382,13 +2370,6 @@ class GostWindow(Adw.ApplicationWindow):
             self._r_cite_cmd.set_selected(
                 {"autocite": 0, "footcite": 1, "parencite": 2, "cite": 3}.get(p["cite_cmd"], 0))
 
-    def _on_doc_type_toggled(self, btn):
-        if btn.get_active():
-            if hasattr(self, "_sb_book_btn"):
-                self._sb_book_btn.handler_block_by_func(self._on_sb_book_toggled)
-                self._sb_book_btn.set_active(btn._dt_key == "book")
-                self._sb_book_btn.handler_unblock_by_func(self._on_sb_book_toggled)
-            self._dirty_preview()
 
     def _on_unit_toggled(self, btn):
         if not btn.get_active():
