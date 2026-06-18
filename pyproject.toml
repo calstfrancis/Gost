@@ -52,4 +52,4 @@ where = ["."]
 include = ["essay_builder*"]
 
 [tool.setuptools.package-data]
-essay_builder = ["fonts/*.ttf", "fonts/*.otf", "*.svg"]
+essay_builder = ["fonts/*.ttf", "fonts/*.otf", "*.svg", "data/CHANGELOG.md"]

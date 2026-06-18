@@ -25,6 +25,7 @@ modules:
         url: https://github.com/calstfrancis/gost.git
         branch: main
     build-commands:
+      - cp CHANGELOG.md essay_builder/data/CHANGELOG.md
       - pip3 install --prefix=/app --no-build-isolation --no-deps .
       - install -Dm644 ca.calstfrancis.Gost.desktop /app/share/applications/ca.calstfrancis.Gost.desktop
       - install -Dm644 icons/gost.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost.svg

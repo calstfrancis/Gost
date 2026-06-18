@@ -21,6 +21,53 @@ from essay_builder.logger import get_logger
 
 # ---------------------------------------------------------------------------
 
+def _changelog_release_notes() -> str:
+    """Read the first section of CHANGELOG.md and return AppStream HTML for AboutWindow."""
+    import re
+    try:
+        import importlib.resources
+        ref = importlib.resources.files("essay_builder").joinpath("data/CHANGELOG.md")
+        text = ref.read_text(encoding="utf-8")
+    except Exception:
+        return "<p>See CHANGELOG.md for release notes.</p>"
+
+    lines = text.splitlines()
+    # Find the first ## heading
+    start = next((i for i, l in enumerate(lines) if l.startswith("## ")), None)
+    if start is None:
+        return "<p>See CHANGELOG.md for release notes.</p>"
+    # Collect lines until the next ## heading
+    section = []
+    for line in lines[start + 1:]:
+        if line.startswith("## "):
+            break
+        section.append(line)
+
+    html = []
+    in_ul = False
+    for line in section:
+        line = line.rstrip()
+        if not line or line == "---":
+            continue
+        if line.startswith("### "):
+            if in_ul:
+                html.append("</ul>")
+                in_ul = False
+            html.append(f"<p>{line[4:].strip()}</p>")
+        elif line.startswith("- "):
+            if not in_ul:
+                html.append("<ul>")
+                in_ul = True
+            item = line[2:].strip()
+            item = re.sub(r"\*\*(.+?)\*\*", r"\1", item)  # strip **bold**
+            item = re.sub(r"`(.+?)`", r"\1", item)         # strip `code`
+            html.append(f"<li>{item}</li>")
+    if in_ul:
+        html.append("</ul>")
+
+    return "".join(html) if html else "<p>See CHANGELOG.md for release notes.</p>"
+
+
 def _switch_row(title: str, subtitle: str = "") -> Adw.SwitchRow:
     row = Adw.SwitchRow(title=title)
     if subtitle:
@@ -2589,20 +2636,7 @@ class GostWindow(Adw.ApplicationWindow):
         about.set_license_type(Gtk.License.GPL_3_0)
         about.set_website("https://github.com/calstfrancis/gost")
         about.set_issue_url("https://github.com/calstfrancis/gost/issues")
-        about.set_release_notes(
-            "<p>Version 0.1.8</p>"
-            "<ul>"
-            "<li>Live auto-preview pane — recompiles as you type, always visible</li>"
-            "<li>Editable source view — edit the generated code directly</li>"
-            "<li>Chapter reordering with up/down buttons</li>"
-            "<li>Per-chapter notes field</li>"
-            "<li>Simple mode toggle in header bar</li>"
-            "<li>Word / ODT export</li>"
-            "<li>ASA, Turabian, and Harvard citation styles</li>"
-            "<li>Journal LaTeX template importer</li>"
-            "<li>Template profiles (save/load/delete)</li>"
-            "</ul>"
-        )
+        about.set_release_notes(_changelog_release_notes())
         about.present()
 
     # ------------------------------------------------------------------
