@@ -1,9 +1,10 @@
 # Changelog
 
-## [0.1.12-dev1] – dev
+## [0.1.12] – 2026-06-18
 
 ### Changed
-- Book mode toggle moved to status bar; untoggling returns to article mode and the sidebar switch is removed.
+- Book mode toggle moved exclusively to the status bar; untoggling returns to article mode. The sidebar Document class switch is removed.
+- GOST Type B font toggle moved exclusively to the status bar; the sidebar switch is removed.
 
 ---
 

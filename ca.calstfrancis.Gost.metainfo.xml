@@ -30,6 +30,11 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.12" date="2026-06-18">
+      <description>
+        <p>Book mode and GOST Type B toggles consolidated into the status bar; sidebar switches removed.</p>
+      </description>
+    </release>
     <release version="0.1.11" date="2026-06-18">
       <description>
         <p>Flatpak packaging, statusbar with GOST Type B and Book mode toggles, and comprehensive book publishing layout features.</p>
