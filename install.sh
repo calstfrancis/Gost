@@ -63,6 +63,8 @@ fi
 info "Installing application to ${INSTALL_DIR}..."
 sudo mkdir -p "$INSTALL_DIR"
 sudo cp -r "$SCRIPT_DIR/essay_builder" "$INSTALL_DIR/"
+sudo find "$INSTALL_DIR/essay_builder" -name "*.pyc" -delete
+sudo find "$INSTALL_DIR/essay_builder" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 sudo chmod -R 644 "$INSTALL_DIR/essay_builder/"*
 sudo find "$INSTALL_DIR/essay_builder" -type d -exec chmod 755 {} \;
 
