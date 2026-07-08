@@ -1,5 +1,12 @@
 # Changelog
 
+## [dev]
+
+### Removed
+- RPM and DEB packaging dropped — `build-rpm.sh`, `build-deb.sh`, and `packaging/gost.spec` removed, along with the CI job that built and attached them to releases. Distribution is flatpak-only via the self-hosted OSTree repo, matching Rubric, Kopilka, and Zerkalo.
+
+---
+
 ## [0.1.12] – 2026-06-18
 
 ### Changed

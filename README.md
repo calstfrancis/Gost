@@ -30,15 +30,22 @@
 
 ## Installation
 
-### RPM (Fedora / openSUSE / RHEL)
+Gost is distributed as a Flatpak via a self-hosted repository.
+
+### Add the repository
 ```bash
-sudo zypper in ./gost-0.1.10-1.noarch.rpm   # openSUSE
-sudo dnf install ./gost-0.1.10-1.noarch.rpm  # Fedora / RHEL
+flatpak remote-add --user calstfrancis \
+  https://calstfrancis.github.io/flatpak/calstfrancis.flatpakrepo
 ```
 
-### DEB (Debian / Ubuntu / Mint)
+### Install
 ```bash
-sudo apt install ./gost_0.1.10_all.deb
+flatpak install calstfrancis ca.calstfrancis.Gost
+```
+
+### Update
+```bash
+flatpak update ca.calstfrancis.Gost
 ```
 
 ### From source
@@ -46,12 +53,6 @@ sudo apt install ./gost_0.1.10_all.deb
 git clone https://github.com/calstfrancis/gost
 cd gost
 python3 -m essay_builder.app
-```
-
-### Build your own RPM / DEB
-```bash
-bash build-rpm.sh   # produces gost-0.1.10-1.noarch.rpm  (requires rpmbuild)
-bash build-deb.sh   # produces gost_0.1.10_all.deb       (requires dpkg-deb; run on Debian/Ubuntu)
 ```
 
 ## Usage
@@ -68,8 +69,6 @@ bash build-deb.sh   # produces gost_0.1.10_all.deb       (requires dpkg-deb; run
 ```bash
 python3 -m essay_builder.app                 # run directly
 python3 -m unittest discover tests/ -v       # run tests (no GTK needed)
-bash build-rpm.sh                            # build RPM (requires rpmbuild)
-bash build-deb.sh                            # build DEB (requires dpkg-deb; Debian/Ubuntu host)
 ```
 
 ## Troubleshooting

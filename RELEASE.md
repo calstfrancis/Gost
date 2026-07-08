@@ -11,30 +11,13 @@
 | File | Platform |
 |------|----------|
 | Flatpak | All Linux (via personal flatpak repo) |
-| `gost-0.1.12-1.noarch.rpm` | Fedora, openSUSE, RHEL, and RPM-based distros |
-| `gost_0.1.12_all.deb` | Debian, Ubuntu, Linux Mint, and DEB-based distros |
 
 ## Installation
-
-### Flatpak (recommended)
 
 ```bash
 flatpak remote-add --user calstfrancis \
   https://calstfrancis.github.io/flatpak/calstfrancis.flatpakrepo
 flatpak install calstfrancis ca.calstfrancis.Gost
-```
-
-### RPM (Fedora / openSUSE / RHEL)
-
-```bash
-sudo zypper in ./gost-0.1.12-1.noarch.rpm   # openSUSE
-sudo dnf install ./gost-0.1.12-1.noarch.rpm  # Fedora / RHEL
-```
-
-### DEB (Debian / Ubuntu / Mint)
-
-```bash
-sudo apt install ./gost_0.1.12_all.deb
 ```
 
 ---
@@ -62,8 +45,6 @@ sudo apt install ./gost_0.1.12_all.deb
 git clone https://github.com/calstfrancis/gost
 cd gost
 python3 -m essay_builder.app   # run directly
-bash build-rpm.sh              # build RPM (requires rpmbuild)
-bash build-deb.sh              # build DEB (requires dpkg-deb; run on Debian/Ubuntu)
 ```
 
 ---
