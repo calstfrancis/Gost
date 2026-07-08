@@ -4,7 +4,7 @@
   <name>Gost</name>
   <summary>Academic essay templater for LaTeX and Typst</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0-or-later</project_license>
+  <project_license>MIT</project_license>
   <description>
     <p>
       Gost generates fully formatted LaTeX and Typst templates for academic
@@ -25,6 +25,7 @@
   <developer_name>Cal St Francis</developer_name>
   <screenshots>
     <screenshot type="default">
+      <image>https://raw.githubusercontent.com/calstfrancis/Gost/main/screenshots/gost-main.png</image>
       <caption>Main window showing citation style selector and layout options</caption>
     </screenshot>
   </screenshots>

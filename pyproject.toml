@@ -7,7 +7,7 @@ name = "gost-academic"
 dynamic = ["version"]
 description = "Academic essay templater — GTK4/libadwaita app for LaTeX, Typst, and Word templates"
 readme = "README.md"
-license = { text = "GPL-3.0-or-later" }
+license = { text = "MIT" }
 requires-python = ">=3.10"
 keywords = [
     "latex", "typst", "essay", "academic", "bibliography",
