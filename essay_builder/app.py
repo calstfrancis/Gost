@@ -108,6 +108,12 @@ def setup_bundled_fonts() -> bool:
 
     Returns True if any font was newly installed (restart recommended).
     """
+    # The flatpak installs these to /app/share/fonts at build time, where both
+    # the app and the bundled typst pick them up via fontconfig. Copying into
+    # the sandboxed home would just duplicate them.
+    if os.environ.get("FLATPAK_ID"):
+        return False
+
     if not _BUNDLED_FONTS_DIR.exists():
         return False
 

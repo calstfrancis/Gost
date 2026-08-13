@@ -9,11 +9,11 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  - --filesystem=home
-  - --filesystem=/tmp
+  # LanguageTool grammar check (languagetool.py)
   - --share=network
-  - --talk-name=org.freedesktop.portal.Desktop
-  - --talk-name=org.freedesktop.Flatpak
+  # Export destinations. Anything outside Documents comes through the file
+  # portal via Gtk.FileDialog, which needs no static permission.
+  - --filesystem=xdg-documents
 
 modules:
   - python3-deps.json
@@ -24,9 +24,19 @@ modules:
       - type: git
         url: https://github.com/calstfrancis/gost.git
         branch: main
+      # Bundled Typst compiler — same musl build Rubric ships, so preview works
+      # inside the sandbox with no host install and no flatpak-spawn escape.
+      - type: archive
+        url: https://github.com/typst/typst/releases/download/v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz
+        sha256: a6044cbad2a954deb921167e257e120ac0a16b20339ec01121194ff9d394996d
+        dest: typst-bin
     build-commands:
       - cp CHANGELOG.md essay_builder/data/CHANGELOG.md
       - pip3 install --prefix=/app --no-build-isolation --no-deps .
+      - install -Dm755 typst-bin/typst /app/bin/typst
+      # Fonts go to /app/share/fonts so the sandboxed typst finds them via
+      # fontconfig; setup_bundled_fonts() is skipped under flatpak accordingly.
+      - install -Dm644 essay_builder/fonts/gosttypeb.ttf /app/share/fonts/gosttypeb.ttf
       - install -Dm644 ca.calstfrancis.Gost.desktop /app/share/applications/ca.calstfrancis.Gost.desktop
       - install -Dm644 icons/gost.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost.svg
       - install -Dm644 icons/gost-symbolic.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost-symbolic.svg

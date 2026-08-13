@@ -2060,7 +2060,9 @@ class GostWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _check_compiler_deps(self):
-        from essay_builder.preview_compiler import typst_available, latex_available, image_tools_available
+        from essay_builder.preview_compiler import (
+            typst_available, latex_available, image_tools_available, _IN_FLATPAK,
+        )
         if self._format == "word":
             self._preview_btn.set_sensitive(False)
             self._preview_btn.set_tooltip_text("Compiled preview not available for Word format")
@@ -2086,6 +2088,17 @@ class GostWindow(Adw.ApplicationWindow):
                 if not self._compile_status.get_text().startswith("typst not"):
                     self._compile_status.set_text("")
         else:
+            if _IN_FLATPAK:
+                self._preview_btn.set_sensitive(False)
+                self._preview_btn.set_tooltip_text(
+                    "LaTeX preview is unavailable in the Flatpak build — "
+                    "export the .tex source, or switch to Typst"
+                )
+                self._compile_status.set_text(
+                    "LaTeX preview unavailable in Flatpak — Export still writes .tex. "
+                    "Typst previews without any setup."
+                )
+                return
             missing = []
             if not latex_available():
                 missing.append("latexmk (install texlive-latexmk)")

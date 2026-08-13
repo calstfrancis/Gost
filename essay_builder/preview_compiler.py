@@ -9,26 +9,25 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple
 
-# When running inside a flatpak sandbox, host binaries are not in PATH.
-# We use flatpak-spawn --host to delegate compilation to the host system.
-# The flatpak manifest adds --filesystem=/tmp so temp files are shared.
+# The flatpak bundles typst at /app/bin/typst and its fonts in /app/share/fonts,
+# so Typst compilation runs entirely inside the sandbox. A full LaTeX toolchain
+# is far too large to bundle, so LaTeX preview is source-install only; the
+# flatpak still generates and exports .tex, it just cannot render it.
 _IN_FLATPAK = bool(os.environ.get("FLATPAK_ID"))
+
+LATEX_UNAVAILABLE_IN_FLATPAK = (
+    "LaTeX preview is not available in the Flatpak build — a full TeX "
+    "installation cannot be bundled.\n"
+    "Export the .tex source and compile it locally, or switch to Typst, "
+    "which is bundled and needs no setup."
+)
 
 
 def _host_which(cmd: str) -> bool:
-    if _IN_FLATPAK:
-        try:
-            r = subprocess.run(["flatpak-spawn", "--host", "which", cmd],
-                               capture_output=True, timeout=5)
-            return r.returncode == 0
-        except Exception:
-            return False
     return shutil.which(cmd) is not None
 
 
 def _run(cmd: list, **kwargs):
-    if _IN_FLATPAK:
-        cmd = ["flatpak-spawn", "--host"] + cmd
     return subprocess.run(cmd, **kwargs)
 
 
@@ -43,6 +42,8 @@ def typst_available() -> bool:
 
 
 def latex_available() -> bool:
+    if _IN_FLATPAK:
+        return False
     return _host_which("latexmk")
 
 
@@ -61,7 +62,7 @@ def compile_typst(source: str) -> Tuple[List[bytes], str]:
     if "fill:" not in source:
         source = "#set page(fill: white)\n" + source
 
-    with tempfile.TemporaryDirectory(dir="/tmp") as d:
+    with tempfile.TemporaryDirectory() as d:
         src = os.path.join(d, "doc.typ")
         out = os.path.join(d, "doc.png")
         with open(src, "w", encoding="utf-8") as f:
@@ -99,14 +100,14 @@ def compile_typst(source: str) -> Tuple[List[bytes], str]:
 
 
 def _cmd(name: str) -> str:
-    """Return command name for flatpak-spawn (just name) or full path for direct exec."""
-    if _IN_FLATPAK:
-        return name
+    """Resolve a compiler to its full path (/app/bin under flatpak)."""
     return shutil.which(name) or name
 
 
 def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], str]:
     """Return (page_png_list, error_str)."""
+    if _IN_FLATPAK:
+        return [], LATEX_UNAVAILABLE_IN_FLATPAK
     if not _host_which("latexmk"):
         return [], "latexmk not found.\nInstall TeX Live or MiKTeX."
 
@@ -124,7 +125,7 @@ def compile_latex(source: str, engine: str = "xelatex") -> Tuple[List[bytes], st
         "lualatex": "-lualatex",
     }.get(engine, "-xelatex")
 
-    with tempfile.TemporaryDirectory(dir="/tmp") as d:
+    with tempfile.TemporaryDirectory() as d:
         src = os.path.join(d, "doc.tex")
         pdf = os.path.join(d, "doc.pdf")
         with open(src, "w", encoding="utf-8") as f:
@@ -205,7 +206,7 @@ def compile_typst_to_pdf(source: str) -> Tuple[str, str]:
         source = "#set page(fill: white)\n" + source
 
     pdf_path = _preview_pdf_path()
-    tmp = tempfile.NamedTemporaryFile(suffix=".typ", dir="/tmp", mode="w", encoding="utf-8", delete=False)
+    tmp = tempfile.NamedTemporaryFile(suffix=".typ", mode="w", encoding="utf-8", delete=False)
     try:
         tmp.write(source)
         tmp.close()
@@ -229,6 +230,8 @@ def compile_typst_to_pdf(source: str) -> Tuple[str, str]:
 
 def compile_latex_to_pdf(source: str, engine: str = "xelatex") -> Tuple[str, str]:
     """Compile LaTeX source to PDF via latexmk. Returns (pdf_path, error_str)."""
+    if _IN_FLATPAK:
+        return "", LATEX_UNAVAILABLE_IN_FLATPAK
     if not _host_which("latexmk"):
         return "", "latexmk not found.\nInstall TeX Live or MiKTeX."
 
@@ -238,7 +241,7 @@ def compile_latex_to_pdf(source: str, engine: str = "xelatex") -> Tuple[str, str
         "lualatex": "-lualatex",
     }.get(engine, "-xelatex")
 
-    with tempfile.TemporaryDirectory(dir="/tmp") as d:
+    with tempfile.TemporaryDirectory() as d:
         src = os.path.join(d, "doc.tex")
         pdf = os.path.join(d, "doc.pdf")
         with open(src, "w", encoding="utf-8") as f:
