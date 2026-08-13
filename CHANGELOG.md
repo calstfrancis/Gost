@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.0-dev1]
+## [0.2.0-dev2]
 
 ### Added
 - **Typst is now bundled with the Flatpak.** The same `typst` 0.14.2 build Rubric ships is installed to `/app/bin/typst`, so Typst preview and PDF export work immediately after install with no host toolchain. The bundled GOST Type B font moves to `/app/share/fonts` where both the app and Typst find it.
@@ -8,6 +8,9 @@
 ### Changed
 - **The Flatpak no longer escapes its sandbox.** Compilation previously ran on the host via `flatpak-spawn --host`, which required `--talk-name=org.freedesktop.Flatpak` (a full host-command escape), plus `--filesystem=home` and `--filesystem=/tmp`. All three are gone; permissions are now `ipc`, `wayland`/`fallback-x11`, `dri`, `network` (LanguageTool), and `xdg-documents`. Exports outside Documents go through the file portal, which needs no static permission.
 - Font setup no longer copies into the user's home when running under Flatpak — the build installs fonts system-wide inside the sandbox instead.
+
+### Fixed
+- **The Flatpak icon now shows consistently.** The manifest only installed the scalable SVG; launchers that don't invoke an SVG loader showed a blank or generic icon. It now rasterises the same PNG sizes `install.sh` already generates for non-Flatpak installs.
 
 ### Removed
 - **LaTeX preview is unavailable in the Flatpak build.** A full TeX installation cannot reasonably be bundled, and keeping it would have meant keeping the sandbox escape. LaTeX source generation and `.tex` export are unaffected, and running Gost from source keeps LaTeX preview exactly as before. Typst — the preferred output format — is bundled and needs no setup.
