@@ -9,6 +9,7 @@ __pycache__/
 # Build / distribution
 dist/
 build/
+.flatpak-builder/
 
 # AppImage build artefacts
 AppDir/
