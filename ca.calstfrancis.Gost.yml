@@ -40,4 +40,15 @@ modules:
       - install -Dm644 ca.calstfrancis.Gost.desktop /app/share/applications/ca.calstfrancis.Gost.desktop
       - install -Dm644 icons/gost.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost.svg
       - install -Dm644 icons/gost-symbolic.svg /app/share/icons/hicolor/scalable/apps/ca.calstfrancis.Gost-symbolic.svg
+      # install.sh rasterises these same sizes alongside the SVG (see its
+      # rsvg-convert loop), because launchers that don't invoke an SVG loader
+      # show a blank or generic icon for SVG-only apps. The flatpak manifest
+      # never did the same, so the icon showed inconsistently for flatpak
+      # installs depending on the launcher.
+      - |
+        for SIZE in 16 24 32 48 64 96 128 256; do
+          mkdir -p "/app/share/icons/hicolor/${SIZE}x${SIZE}/apps"
+          rsvg-convert -w "${SIZE}" -h "${SIZE}" icons/gost.svg \
+            -o "/app/share/icons/hicolor/${SIZE}x${SIZE}/apps/ca.calstfrancis.Gost.png"
+        done
       - install -Dm644 ca.calstfrancis.Gost.metainfo.xml /app/share/metainfo/ca.calstfrancis.Gost.metainfo.xml
