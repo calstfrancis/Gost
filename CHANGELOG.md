@@ -1,8 +1,10 @@
 # Changelog
 
-## [0.2.0-dev2]
+## [0.2.0-dev3]
 
 ### Added
+- **Welcome / What's New window.** Shown on first launch (a quick-start tour) and again after any version bump (jumping straight to a live-rendered What's New tab from `CHANGELOG.md`), matching the rest of the house style. Gost also starts naming its releases now — this cycle's predecessor, 0.1.12, has been retroactively named "Steady Margin" so the About window and this window have something to show; see the `__release_name__` constant in `essay_builder/__init__.py`.
+- **Autosave recovery for hand-edited source.** Switching the preview to Source mode and editing it directly was the one kind of work Gost never persisted anywhere at all. Gost now snapshots that manual edit to `~/.local/share/gost/autosave.json` every 3 minutes and offers to restore it on the next launch if it's still there.
 - **Typst is now bundled with the Flatpak.** The same `typst` 0.14.2 build Rubric ships is installed to `/app/bin/typst`, so Typst preview and PDF export work immediately after install with no host toolchain. The bundled GOST Type B font moves to `/app/share/fonts` where both the app and Typst find it.
 
 ### Changed
@@ -20,7 +22,7 @@
 
 ---
 
-## [0.1.12] – 2026-06-18
+## [0.1.12] "Steady Margin" – 2026-06-18
 
 ### Changed
 - Book mode toggle moved exclusively to the status bar; untoggling returns to article mode. The sidebar Document class switch is removed.

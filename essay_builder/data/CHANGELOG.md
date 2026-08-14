@@ -1,6 +1,28 @@
 # Changelog
 
-## [0.1.12] – 2026-06-18
+## [0.2.0-dev3]
+
+### Added
+- **Welcome / What's New window.** Shown on first launch (a quick-start tour) and again after any version bump (jumping straight to a live-rendered What's New tab from `CHANGELOG.md`), matching the rest of the house style. Gost also starts naming its releases now — this cycle's predecessor, 0.1.12, has been retroactively named "Steady Margin" so the About window and this window have something to show; see the `__release_name__` constant in `essay_builder/__init__.py`.
+- **Autosave recovery for hand-edited source.** Switching the preview to Source mode and editing it directly was the one kind of work Gost never persisted anywhere at all. Gost now snapshots that manual edit to `~/.local/share/gost/autosave.json` every 3 minutes and offers to restore it on the next launch if it's still there.
+- **Typst is now bundled with the Flatpak.** The same `typst` 0.14.2 build Rubric ships is installed to `/app/bin/typst`, so Typst preview and PDF export work immediately after install with no host toolchain. The bundled GOST Type B font moves to `/app/share/fonts` where both the app and Typst find it.
+
+### Changed
+- **The Flatpak no longer escapes its sandbox.** Compilation previously ran on the host via `flatpak-spawn --host`, which required `--talk-name=org.freedesktop.Flatpak` (a full host-command escape), plus `--filesystem=home` and `--filesystem=/tmp`. All three are gone; permissions are now `ipc`, `wayland`/`fallback-x11`, `dri`, `network` (LanguageTool), and `xdg-documents`. Exports outside Documents go through the file portal, which needs no static permission.
+- Font setup no longer copies into the user's home when running under Flatpak — the build installs fonts system-wide inside the sandbox instead.
+
+### Fixed
+- **The Flatpak icon now shows consistently.** The manifest only installed the scalable SVG; launchers that don't invoke an SVG loader showed a blank or generic icon. It now rasterises the same PNG sizes `install.sh` already generates for non-Flatpak installs.
+
+### Removed
+- **LaTeX preview is unavailable in the Flatpak build.** A full TeX installation cannot reasonably be bundled, and keeping it would have meant keeping the sandbox escape. LaTeX source generation and `.tex` export are unaffected, and running Gost from source keeps LaTeX preview exactly as before. Typst — the preferred output format — is bundled and needs no setup.
+
+### Removed
+- RPM and DEB packaging dropped — `build-rpm.sh`, `build-deb.sh`, and `packaging/gost.spec` removed, along with the CI job that built and attached them to releases. Distribution is flatpak-only via the self-hosted OSTree repo, matching Rubric, Kopilka, and Zerkalo.
+
+---
+
+## [0.1.12] "Steady Margin" – 2026-06-18
 
 ### Changed
 - Book mode toggle moved exclusively to the status bar; untoggling returns to article mode. The sidebar Document class switch is removed.

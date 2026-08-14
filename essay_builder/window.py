@@ -3,6 +3,7 @@ window.py — GTK4 / libadwaita UI for Gost.
 """
 
 import datetime
+import json
 import threading
 from typing import List
 
@@ -16,8 +17,10 @@ from gi.repository import Gtk, Adw, Gdk, GdkPixbuf, GLib, Gio
 from essay_builder.texgen import generate, STYLE_DEFAULTS, FONT_OPTIONS
 from essay_builder.typstgen import generate as typst_generate
 from essay_builder.wordgen import generate as word_generate, available as word_available, docx_to_odt
-from essay_builder.config import Config
+from essay_builder.config import Config, AUTOSAVE_SECS, AUTOSAVE_PATH, atomic_write_text
 from essay_builder.logger import get_logger
+
+logger = get_logger()
 
 # ---------------------------------------------------------------------------
 
@@ -66,6 +69,64 @@ def _changelog_release_notes() -> str:
         html.append("</ul>")
 
     return "".join(html) if html else "<p>See CHANGELOG.md for release notes.</p>"
+
+
+def _render_markdown_page(content: str) -> Gtk.ScrolledWindow:
+    """Plain-text-buffer markdown renderer for Welcome/What's New — headings,
+    bold, inline code, code blocks, and bullets only. Same reduced subset and
+    approach as Rubric's help_window._doc_page, so both apps' "just enough
+    markdown" renderers stay easy to keep in sync by eye."""
+    import re
+    scroll = Gtk.ScrolledWindow()
+    scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    scroll.set_vexpand(True)
+    tv = Gtk.TextView()
+    tv.set_editable(False)
+    tv.set_cursor_visible(False)
+    tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+    tv.set_top_margin(16)
+    tv.set_bottom_margin(16)
+    tv.set_left_margin(22)
+    tv.set_right_margin(22)
+    buf = tv.get_buffer()
+    buf.create_tag("h1", weight=700, scale=1.4, pixels_above_lines=10, pixels_below_lines=4)
+    buf.create_tag("h2", weight=700, scale=1.15, pixels_above_lines=8, pixels_below_lines=2)
+    buf.create_tag("bold", weight=700)
+    buf.create_tag("code", family="monospace", scale=0.95)
+    buf.create_tag("bullet", left_margin=24)
+    it = buf.get_end_iter()
+    in_code = False
+    for raw in content.splitlines():
+        line = raw.rstrip()
+        if line.startswith("```"):
+            in_code = not in_code
+            buf.insert(it, "\n")
+            continue
+        if in_code:
+            buf.insert_with_tags_by_name(it, line + "\n", "code")
+            continue
+        if not line:
+            buf.insert(it, "\n")
+            continue
+        m = re.match(r'^(#{1,2})\s+(.*)', line)
+        if m:
+            tag = "h1" if len(m.group(1)) == 1 else "h2"
+            buf.insert_with_tags_by_name(it, m.group(2) + "\n", tag)
+            continue
+        m = re.match(r'^[-*]\s+(.*)', line)
+        if m:
+            buf.insert_with_tags_by_name(it, "  • " + m.group(1) + "\n", "bullet")
+            continue
+        for part in re.split(r'(\*\*[^*]+\*\*|`[^`]+`)', line):
+            if part.startswith("**") and part.endswith("**"):
+                buf.insert_with_tags_by_name(it, part[2:-2], "bold")
+            elif part.startswith("`") and part.endswith("`"):
+                buf.insert_with_tags_by_name(it, part[1:-1], "code")
+            else:
+                buf.insert(it, part)
+        buf.insert(it, "\n")
+    scroll.set_child(tv)
+    return scroll
 
 
 def _switch_row(title: str, subtitle: str = "") -> Adw.SwitchRow:
@@ -268,6 +329,9 @@ class GostWindow(Adw.ApplicationWindow):
         self._check_compiler_deps()
         if self._live_preview_visible:
             GLib.timeout_add(800, self._initial_live_compile)
+
+        GLib.timeout_add_seconds(AUTOSAVE_SECS, self._do_autosave)
+        GLib.idle_add(self._check_welcome)
 
         # Apply saved GOST font preference on startup
         if self._config.get("use_gost_font", False):
@@ -2036,6 +2100,83 @@ class GostWindow(Adw.ApplicationWindow):
         self._source_manually_edited = False
         if hasattr(self, "_src_edited_lbl"):
             self._src_edited_lbl.set_visible(False)
+        self._clear_autosave()
+
+    # ------------------------------------------------------------------
+    # Autosave — recovers hand-edited source that was never exported.
+    # Regenerating from the template (_refresh_source) is a deliberate
+    # discard, so it clears the autosave too; there is nothing else in Gost
+    # that persists a manual source edit, since form fields already round-trip
+    # through profiles and the compiled output isn't the editable artifact.
+    # ------------------------------------------------------------------
+
+    def _has_restorable_edit(self) -> bool:
+        if not self._source_manually_edited or not hasattr(self, "_preview_buf"):
+            return False
+        buf = self._preview_buf
+        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+        return bool(text.strip())
+
+    def _do_autosave(self):
+        if not self._has_restorable_edit():
+            self._clear_autosave()
+            return True
+        buf = self._preview_buf
+        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+        try:
+            data = {"format": self._format, "content": text, "_autosave": True}
+            # Atomic — the safety net must not be destroyed by the same
+            # crash that makes you need it.
+            atomic_write_text(AUTOSAVE_PATH, json.dumps(data, indent=2, ensure_ascii=False))
+        except Exception as e:
+            logger.error(f"Autosave failed: {e}")
+        return True
+
+    def _check_autosave(self):
+        if AUTOSAVE_PATH.exists():
+            dlg = Adw.MessageDialog(
+                transient_for=self,
+                heading="Restore unsaved edits?",
+                body="Gost found hand-edited source from a previous session that "
+                     "was never exported. Restore it?",
+            )
+            dlg.add_response("discard", "Discard")
+            dlg.add_response("restore", "Restore")
+            dlg.set_response_appearance("restore", Adw.ResponseAppearance.SUGGESTED)
+            dlg.set_default_response("restore")
+
+            def on_resp(d, r):
+                if r == "restore":
+                    self._restore_autosave()
+                self._clear_autosave()
+
+            dlg.connect("response", on_resp)
+            dlg.present()
+        return False
+
+    def _restore_autosave(self):
+        try:
+            data = json.loads(AUTOSAVE_PATH.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.error(f"Failed to read autosave: {e}")
+            return
+        content = data.get("content", "")
+        if not content:
+            return
+        self._updating_source_buf = True
+        self._preview_buf.set_text(content)
+        self._updating_source_buf = False
+        self._source_manually_edited = True
+        if hasattr(self, "_src_edited_lbl"):
+            self._src_edited_lbl.set_visible(True)
+        self._nav_select("preview")
+        self._content_stack.set_visible_child_name("preview")
+        self._prev_mode_btns["source"].set_active(True)
+        if hasattr(self, "_preview_inner_stack"):
+            self._preview_inner_stack.set_visible_child_name("source")
+
+    def _clear_autosave(self):
+        AUTOSAVE_PATH.unlink(missing_ok=True)
 
     def _dirty_preview(self):
         self._preview_dirty = True
@@ -2631,15 +2772,104 @@ class GostWindow(Adw.ApplicationWindow):
         self._show_toast(summary, timeout=4)
 
     # ------------------------------------------------------------------
+    # Welcome / What's New
+    # ------------------------------------------------------------------
+
+    def _check_welcome(self):
+        from essay_builder import __version__
+        if not self._config.get("first_launch_completed", False):
+            self._show_welcome(is_new_version=False, on_done=self._check_autosave)
+        elif self._config.get("last_seen_version", "") != __version__:
+            self._show_welcome(is_new_version=True, on_done=self._check_autosave)
+        else:
+            self._check_autosave()
+        return False
+
+    def _show_welcome(self, is_new_version: bool, on_done=None):
+        from essay_builder import __version__
+
+        win = Adw.Window(transient_for=self, modal=True)
+        win.set_title("Welcome to Gost")
+        win.set_default_size(680, 560)
+        tv = Adw.ToolbarView()
+        hdr = Adw.HeaderBar()
+        win.set_content(tv)
+        tv.add_top_bar(hdr)
+
+        tabs = Gtk.Notebook()
+        tabs.set_show_border(False)
+        tabs.set_vexpand(True)
+
+        welcome_text = (
+            "# Welcome to Gost\n\n"
+            "Gost generates LaTeX, Typst, and Word templates for SBL, Chicago, "
+            "MLA, APA, ASA, Turabian, and Harvard citation styles.\n\n"
+            "## Getting started\n\n"
+            "**Title & Authors** — enter the document title, subtitle, "
+            "author(s), affiliation, and course.\n\n"
+            "**Citation Style** — pick SBL, Chicago, MLA, or APA. Heading "
+            "styles, page numbering, and running headers follow automatically.\n\n"
+            "**Layout & Spacing** — set paper size, margins, font size, and "
+            "line spacing.\n\n"
+            "**Preview** — click **Preview** in the top bar to compile and "
+            "see the rendered pages; the Source tab shows the generated code "
+            "and can be edited directly.\n\n"
+            "**Export** — save as `.typ`, `.tex` plus `.latexmkrc`, or "
+            "`.docx` / `.odt`.\n\n"
+            "## First steps\n\n"
+            "- Toggle Typst, LaTeX, or Word in the header bar\n"
+            "- Turn on Live Preview to see changes recompile as you type\n"
+            "- Save a profile once your settings are dialed in, to reuse later\n"
+        )
+
+        import importlib.resources
+        try:
+            whats_new = importlib.resources.files("essay_builder").joinpath(
+                "data/CHANGELOG.md"
+            ).read_text(encoding="utf-8")
+        except Exception:
+            whats_new = "# What's New\n\nNo changelog available."
+
+        tabs.append_page(_render_markdown_page(welcome_text), Gtk.Label(label="Welcome"))
+        tabs.append_page(_render_markdown_page(whats_new), Gtk.Label(label="What's New"))
+        tabs.set_current_page(1 if is_new_version else 0)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        outer.append(tabs)
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_row.set_margin_start(16)
+        btn_row.set_margin_end(16)
+        btn_row.set_margin_top(8)
+        btn_row.set_margin_bottom(14)
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        btn_row.append(spacer)
+        close_btn = Gtk.Button(label="Let's go" if is_new_version else "Get started")
+        close_btn.add_css_class("suggested-action")
+
+        def _on_close(_b):
+            self._config.set("first_launch_completed", True)
+            self._config.set("last_seen_version", __version__)
+            win.close()
+            if on_done:
+                GLib.idle_add(on_done)
+
+        close_btn.connect("clicked", _on_close)
+        btn_row.append(close_btn)
+        outer.append(btn_row)
+        tv.set_content(outer)
+        win.present()
+
+    # ------------------------------------------------------------------
     # About dialog
     # ------------------------------------------------------------------
 
     def _show_about(self, _btn):
-        from essay_builder import __version__
+        from essay_builder import __version__, __release_name__
         about = Adw.AboutWindow()
         about.set_transient_for(self)
         about.set_application_name("Gost")
-        about.set_version(__version__)
+        about.set_version(f'{__version__} "{__release_name__}"')
         about.set_comments(
             "Academic Essay Templater.\n"
             "Generate LaTeX and Typst templates for SBL, Chicago, MLA, APA, ASA, Turabian, and Harvard."

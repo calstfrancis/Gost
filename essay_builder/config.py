@@ -2,12 +2,42 @@
 config.py — Settings persistence for Gost.
 """
 
+import contextlib
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("gost")
+
+AUTOSAVE_SECS = 180
+AUTOSAVE_DIR = Path.home() / ".local" / "share" / "gost"
+AUTOSAVE_PATH = AUTOSAVE_DIR / "autosave.json"
+
+
+def atomic_write_text(path: str | Path, text: str, encoding: str = "utf-8") -> None:
+    """Write `text` to `path` so the file is never left half-written.
+
+    Same rationale and implementation as Rubric's `atomic_write_text`: a temp
+    file beside the target, flushed and fsynced, then swapped in with
+    `os.replace` — a reader never sees a truncated hybrid, and the autosave
+    itself can't be corrupted by the same crash it exists to protect against.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
 
 
 class Config:
@@ -19,6 +49,8 @@ class Config:
         "paper": "letterpaper",
         "window_width": 960,
         "window_height": 720,
+        "first_launch_completed": False,
+        "last_seen_version": "",
     }
     
     def __init__(self):
